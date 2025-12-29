@@ -4,23 +4,26 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/mitsuhiko/gh-issue-sync/internal/app"
 	"github.com/mitsuhiko/gh-issue-sync/internal/ghcli"
+	"github.com/mitsuhiko/gh-issue-sync/skill"
 )
 
 type Options struct {
-	Init   InitCommand   `command:"init" description:"Initialize issue sync" long-description:"Create the .issues layout and config. If --owner/--repo are omitted, the git remote is used."`
-	Pull   PullCommand   `command:"pull" description:"Pull issues from GitHub" long-description:"Fetch issues from GitHub and write/update local issue files."`
-	Push   PushCommand   `command:"push" description:"Push local changes to GitHub" long-description:"Create or update GitHub issues based on local changes."`
-	Status StatusCommand `command:"status" description:"Show sync status" long-description:"Show local changes and last full pull time."`
-	New    NewCommand    `command:"new" description:"Create a new local issue" long-description:"Create a new local issue file. Use --edit to open an editor for the initial content."`
-	Edit   EditCommand   `command:"edit" description:"Open an issue in your editor" long-description:"Open an issue file in your preferred editor ($VISUAL, $EDITOR, or git core.editor)."`
-	Close  CloseCommand  `command:"close" description:"Mark an issue for closing" long-description:"Mark an issue as closed locally (use push to sync)." `
-	Reopen ReopenCommand `command:"reopen" description:"Reopen a closed issue" long-description:"Mark an issue as open locally (use push to sync)."`
-	Diff   DiffCommand   `command:"diff" description:"Show diff between local and original/remote" long-description:"Show what changed in a local issue compared to the last synced version or current remote state."`
+	Init       InitCommand       `command:"init" description:"Initialize issue sync" long-description:"Create the .issues layout and config. If --owner/--repo are omitted, the git remote is used."`
+	Pull       PullCommand       `command:"pull" description:"Pull issues from GitHub" long-description:"Fetch issues from GitHub and write/update local issue files."`
+	Push       PushCommand       `command:"push" description:"Push local changes to GitHub" long-description:"Create or update GitHub issues based on local changes."`
+	Status     StatusCommand     `command:"status" description:"Show sync status" long-description:"Show local changes and last full pull time."`
+	New        NewCommand        `command:"new" description:"Create a new local issue" long-description:"Create a new local issue file. Use --edit to open an editor for the initial content."`
+	Edit       EditCommand       `command:"edit" description:"Open an issue in your editor" long-description:"Open an issue file in your preferred editor ($VISUAL, $EDITOR, or git core.editor)."`
+	Close      CloseCommand      `command:"close" description:"Mark an issue for closing" long-description:"Mark an issue as closed locally (use push to sync)." `
+	Reopen     ReopenCommand     `command:"reopen" description:"Reopen a closed issue" long-description:"Mark an issue as open locally (use push to sync)."`
+	Diff       DiffCommand       `command:"diff" description:"Show diff between local and original/remote" long-description:"Show what changed in a local issue compared to the last synced version or current remote state."`
+	WriteSkill WriteSkillCommand `command:"write-skill" description:"Write agent skill file" long-description:"Write the gh-issue-sync skill file for coding agents to the specified location."`
 }
 
 type BaseCommand struct {
@@ -94,6 +97,10 @@ type DiffCommand struct {
 	} `positional-args:"yes"`
 }
 
+type WriteSkillCommand struct {
+	Output string `long:"output" short:"o" value-name:"DIR" description:"Output directory (default: ~/.codex/skills/gh-issue-sync/)"`
+}
+
 func (c *InitCommand) Usage() string {
 	return "[OPTIONS]"
 }
@@ -128,6 +135,10 @@ func (c *ReopenCommand) Usage() string {
 
 func (c *DiffCommand) Usage() string {
 	return "[OPTIONS] <issue>"
+}
+
+func (c *WriteSkillCommand) Usage() string {
+	return "[OPTIONS]"
 }
 
 func (c *InitCommand) Execute(_ []string) error {
@@ -204,6 +215,30 @@ func (c *DiffCommand) Execute(args []string) error {
 		return fmt.Errorf("issue number is required")
 	}
 	return c.App.Diff(context.Background(), number, app.DiffOptions{Remote: c.Remote})
+}
+
+func (c *WriteSkillCommand) Execute(args []string) error {
+	outputDir := c.Output
+	if outputDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("cannot determine home directory: %w", err)
+		}
+		outputDir = filepath.Join(home, ".codex", "skills", "gh-issue-sync")
+	}
+
+	skillPath := filepath.Join(outputDir, "SKILL.md")
+
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", outputDir, err)
+	}
+
+	if err := os.WriteFile(skillPath, []byte(skill.SkillContent), 0644); err != nil {
+		return fmt.Errorf("failed to write skill file: %w", err)
+	}
+
+	fmt.Printf("Wrote skill to: %s\n", skillPath)
+	return nil
 }
 
 func main() {

@@ -213,6 +213,23 @@ When a conflict occurs:
 - On **push**: Remote changes are detected, local push is skipped
 - Use `--force` on pull to overwrite local changes
 
+## Agent Skill
+
+`gh-issue-sync` includes a skill file for coding agents. Install it with:
+
+```bash
+gh-issue-sync write-skill
+```
+
+This writes a `SKILL.md` to `~/.codex/skills/gh-issue-sync/` that teaches agents
+how to use the tool for triaging, searching, and managing issues.
+
+To install to a custom location:
+
+```bash
+gh-issue-sync write-skill --output /path/to/skills/
+```
+
 ## License
 
 MIT
