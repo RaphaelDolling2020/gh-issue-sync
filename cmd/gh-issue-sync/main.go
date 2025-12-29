@@ -19,6 +19,7 @@ type Options struct {
 	Push       PushCommand       `command:"push" description:"Push local changes to GitHub" long-description:"Create or update GitHub issues based on local changes."`
 	Sync       SyncCommand       `command:"sync" description:"Pull and push issues" long-description:"Push local changes first, then pull updates from GitHub."`
 	Status     StatusCommand     `command:"status" description:"Show sync status" long-description:"Show local changes and last full pull time."`
+	List       ListCommand       `command:"list" alias:"ls" description:"List local issues" long-description:"Display a formatted list of local issues with filtering options."`
 	New        NewCommand        `command:"new" description:"Create a new local issue" long-description:"Create a new local issue file. Use --edit to open an editor for the initial content."`
 	Edit       EditCommand       `command:"edit" description:"Open an issue in your editor" long-description:"Open an issue file in your preferred editor ($VISUAL, $EDITOR, or git core.editor)."`
 	View       ViewCommand       `command:"view" description:"View an issue" long-description:"Display an issue with nice formatting, showing metadata and body."`
@@ -64,6 +65,16 @@ type SyncCommand struct {
 
 type StatusCommand struct {
 	BaseCommand
+}
+
+type ListCommand struct {
+	BaseCommand
+	All      bool     `long:"all" short:"a" description:"Include closed issues"`
+	State    string   `long:"state" choice:"open" choice:"closed" description:"Filter by state"`
+	Label    []string `long:"label" short:"l" value-name:"LABEL" description:"Filter by label (repeatable)"`
+	Assignee string   `long:"assignee" description:"Filter by assignee"`
+	Local    bool     `long:"local" description:"Show only local (unpushed) issues"`
+	Modified bool     `long:"modified" short:"m" description:"Show only modified issues"`
 }
 
 type NewCommand struct {
@@ -137,6 +148,10 @@ func (c *StatusCommand) Usage() string {
 	return "[OPTIONS]"
 }
 
+func (c *ListCommand) Usage() string {
+	return "[OPTIONS]"
+}
+
 func (c *NewCommand) Usage() string {
 	return "[OPTIONS]"
 }
@@ -195,6 +210,18 @@ func (c *SyncCommand) Execute(_ []string) error {
 
 func (c *StatusCommand) Execute(_ []string) error {
 	return c.App.Status(context.Background())
+}
+
+func (c *ListCommand) Execute(_ []string) error {
+	opts := app.ListOptions{
+		All:      c.All,
+		State:    c.State,
+		Label:    c.Label,
+		Assignee: c.Assignee,
+		Local:    c.Local,
+		Modified: c.Modified,
+	}
+	return c.App.List(context.Background(), opts)
 }
 
 func (c *NewCommand) Execute(args []string) error {
@@ -296,6 +323,7 @@ func main() {
 	opts.Push.App = application
 	opts.Sync.App = application
 	opts.Status.App = application
+	opts.List.App = application
 	opts.New.App = application
 	opts.Edit.App = application
 	opts.View.App = application

@@ -61,6 +61,15 @@ type ViewOptions struct {
 	Raw bool
 }
 
+type ListOptions struct {
+	All      bool
+	State    string
+	Label    []string
+	Assignee string
+	Local    bool
+	Modified bool
+}
+
 type IssueFile struct {
 	Issue issue.Issue
 	Path  string
@@ -741,6 +750,166 @@ func (a *App) Status(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (a *App) List(ctx context.Context, opts ListOptions) error {
+	p := paths.New(a.Root)
+	if _, err := loadConfig(p.ConfigPath); err != nil {
+		return err
+	}
+	t := a.Theme
+
+	// Load label colors for display
+	labelCache, _ := loadLabelCache(p)
+	labelColors := labelCacheToColorMap(labelCache)
+
+	localIssues, err := loadLocalIssues(p)
+	if err != nil {
+		return err
+	}
+
+	// Apply filters
+	var filtered []IssueFile
+	for _, item := range localIssues {
+		// State filter
+		if opts.State != "" && item.State != opts.State {
+			continue
+		}
+		if !opts.All && opts.State == "" && item.State != "open" {
+			continue
+		}
+
+		// Local-only filter
+		if opts.Local && !item.Issue.Number.IsLocal() {
+			continue
+		}
+
+		// Modified filter
+		if opts.Modified {
+			if item.Issue.Number.IsLocal() {
+				// Local issues are always "modified" (unpushed)
+			} else {
+				original, hasOriginal := readOriginalIssue(p, item.Issue.Number.String())
+				if hasOriginal && issue.EqualIgnoringSyncedAt(item.Issue, original) {
+					continue
+				}
+			}
+		}
+
+		// Label filter
+		if len(opts.Label) > 0 {
+			hasLabel := false
+			for _, wantLabel := range opts.Label {
+				for _, haveLabel := range item.Issue.Labels {
+					if strings.EqualFold(wantLabel, haveLabel) {
+						hasLabel = true
+						break
+					}
+				}
+				if hasLabel {
+					break
+				}
+			}
+			if !hasLabel {
+				continue
+			}
+		}
+
+		// Assignee filter
+		if opts.Assignee != "" {
+			hasAssignee := false
+			for _, assignee := range item.Issue.Assignees {
+				if strings.EqualFold(opts.Assignee, assignee) {
+					hasAssignee = true
+					break
+				}
+			}
+			if !hasAssignee {
+				continue
+			}
+		}
+
+		filtered = append(filtered, item)
+	}
+
+	// Sort: remote issues first (by number), then local issues
+	sort.Slice(filtered, func(i, j int) bool {
+		iLocal := filtered[i].Issue.Number.IsLocal()
+		jLocal := filtered[j].Issue.Number.IsLocal()
+		if iLocal != jLocal {
+			return !iLocal // Remote issues first
+		}
+		return filtered[i].Issue.Number.String() < filtered[j].Issue.Number.String()
+	})
+
+	if len(filtered) == 0 {
+		fmt.Fprintln(a.Out, t.MutedText("No issues found"))
+		return nil
+	}
+
+	// Format and print
+	for _, item := range filtered {
+		a.printIssueLine(item, labelColors)
+	}
+
+	return nil
+}
+
+func (a *App) printIssueLine(item IssueFile, labelColors map[string]string) {
+	t := a.Theme
+	iss := item.Issue
+
+	// Issue number
+	numRaw := iss.Number.String()
+	if !iss.Number.IsLocal() {
+		numRaw = "#" + numRaw
+	}
+	var numDisplay string
+	if iss.Number.IsLocal() {
+		numDisplay = t.WarningText(numRaw)
+	} else {
+		numDisplay = t.AccentText(numRaw)
+	}
+
+	// Title (truncate if too long)
+	title := iss.Title
+	maxTitleLen := 50
+	if len(title) > maxTitleLen {
+		title = title[:maxTitleLen-3] + "..."
+	}
+
+	// Labels
+	var labelStrs []string
+	for _, label := range iss.Labels {
+		color := labelColors[strings.ToLower(label)]
+		if color != "" {
+			labelStrs = append(labelStrs, t.FormatLabel(label, color))
+		} else {
+			labelStrs = append(labelStrs, t.MutedText(label))
+		}
+	}
+	labelDisplay := strings.Join(labelStrs, " ")
+
+	// Assignees
+	var assigneeDisplay string
+	if len(iss.Assignees) > 0 {
+		assignees := make([]string, len(iss.Assignees))
+		for i, a := range iss.Assignees {
+			assignees[i] = "@" + a
+		}
+		assigneeDisplay = t.MutedText(strings.Join(assignees, ", "))
+	}
+
+	// Build output line with proper padding
+	line := padRight(numDisplay, 6) + "  " + padRight(title, 50)
+	if labelDisplay != "" {
+		line += "  " + labelDisplay
+	}
+	if assigneeDisplay != "" {
+		line += "  " + assigneeDisplay
+	}
+
+	fmt.Fprintln(a.Out, line)
 }
 
 func (a *App) NewIssue(ctx context.Context, title string, opts NewOptions) error {
@@ -1687,6 +1856,23 @@ func diffStringSet(old, new []string) ([]string, []string) {
 
 // localRefPattern matches local issue references like #T1, #T42, #Tabc123 (T followed by alphanumerics)
 var localRefPattern = regexp.MustCompile(`#(T[a-zA-Z0-9]+)`)
+
+// ansiPattern matches ANSI escape sequences
+var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// stripAnsi removes ANSI escape sequences from a string
+func stripAnsi(s string) string {
+	return ansiPattern.ReplaceAllString(s, "")
+}
+
+// padRight pads a string (ignoring ANSI codes) to the given width
+func padRight(s string, width int) string {
+	visible := len(stripAnsi(s))
+	if visible >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-visible)
+}
 
 func applyMapping(issueItem *issue.Issue, mapping map[string]string) bool {
 	changed := false

@@ -228,6 +228,136 @@ func TestOrphanedOriginalsDetection(t *testing.T) {
 	}
 }
 
+func TestList(t *testing.T) {
+	root := t.TempDir()
+	p := paths.New(root)
+	if err := p.EnsureLayout(); err != nil {
+		t.Fatalf("layout: %v", err)
+	}
+	if err := config.Save(p.ConfigPath, config.Default("owner", "repo")); err != nil {
+		t.Fatalf("config: %v", err)
+	}
+
+	// Create some issues
+	issues := []struct {
+		num      string
+		title    string
+		state    string
+		labels   []string
+		assignee []string
+	}{
+		{"1", "Open Bug", "open", []string{"bug"}, []string{"alice"}},
+		{"2", "Open Feature", "open", []string{"enhancement"}, nil},
+		{"3", "Closed Bug", "closed", []string{"bug"}, nil},
+		{"T123", "Local Issue", "open", nil, nil},
+	}
+
+	for _, iss := range issues {
+		dir := p.OpenDir
+		if iss.state == "closed" {
+			dir = p.ClosedDir
+		}
+		i := issue.Issue{
+			Number:    issue.IssueNumber(iss.num),
+			Title:     iss.title,
+			State:     iss.state,
+			Labels:    iss.labels,
+			Assignees: iss.assignee,
+		}
+		path := issue.PathFor(dir, i.Number, i.Title)
+		if err := issue.WriteFile(path, i); err != nil {
+			t.Fatalf("write issue %s: %v", iss.num, err)
+		}
+		// Write originals for non-local issues
+		if !strings.HasPrefix(iss.num, "T") {
+			if err := issue.WriteFile(filepath.Join(p.OriginalsDir, iss.num+".md"), i); err != nil {
+				t.Fatalf("write original %s: %v", iss.num, err)
+			}
+		}
+	}
+
+	var out strings.Builder
+	application := New(root, ghcli.ExecRunner{}, &out, io.Discard)
+
+	// Test: list open issues (default)
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{}); err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	output := out.String()
+	if !strings.Contains(output, "#1") || !strings.Contains(output, "#2") {
+		t.Fatalf("expected open issues #1 and #2 in output: %s", output)
+	}
+	if strings.Contains(output, "#3") {
+		t.Fatalf("closed issue #3 should not be in default list: %s", output)
+	}
+	if !strings.Contains(output, "T123") {
+		t.Fatalf("local issue T123 should be in output: %s", output)
+	}
+
+	// Test: list all issues
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{All: true}); err != nil {
+		t.Fatalf("list --all: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "#3") {
+		t.Fatalf("closed issue #3 should be in --all output: %s", output)
+	}
+
+	// Test: filter by state
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{State: "closed"}); err != nil {
+		t.Fatalf("list --state closed: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "#3") {
+		t.Fatalf("closed issue #3 should be in --state closed: %s", output)
+	}
+	if strings.Contains(output, "#1") {
+		t.Fatalf("open issue #1 should not be in --state closed: %s", output)
+	}
+
+	// Test: filter by label
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{All: true, Label: []string{"bug"}}); err != nil {
+		t.Fatalf("list --label bug: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "#1") || !strings.Contains(output, "#3") {
+		t.Fatalf("bug-labeled issues should be in output: %s", output)
+	}
+	if strings.Contains(output, "#2") {
+		t.Fatalf("enhancement issue should not be in --label bug: %s", output)
+	}
+
+	// Test: filter by assignee
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{Assignee: "alice"}); err != nil {
+		t.Fatalf("list --assignee alice: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "#1") {
+		t.Fatalf("alice's issue #1 should be in output: %s", output)
+	}
+	if strings.Contains(output, "#2") {
+		t.Fatalf("unassigned issue #2 should not be in --assignee alice: %s", output)
+	}
+
+	// Test: filter by local only
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{Local: true}); err != nil {
+		t.Fatalf("list --local: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "T123") {
+		t.Fatalf("local issue T123 should be in --local: %s", output)
+	}
+	if strings.Contains(output, "#1") {
+		t.Fatalf("remote issue #1 should not be in --local: %s", output)
+	}
+}
+
 func TestLocalIssuesNotOrphaned(t *testing.T) {
 	root := t.TempDir()
 	p := paths.New(root)
