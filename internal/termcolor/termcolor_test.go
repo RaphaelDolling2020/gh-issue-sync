@@ -43,9 +43,9 @@ func TestColorTo256(t *testing.T) {
 		want  uint8
 	}{
 		// Pure colors should map to cube
-		{"red", Color{255, 0, 0}, 196},   // cube index for max red
-		{"green", Color{0, 255, 0}, 46},  // cube index for max green
-		{"blue", Color{0, 0, 255}, 21},   // cube index for max blue
+		{"red", Color{255, 0, 0}, 196},  // cube index for max red
+		{"green", Color{0, 255, 0}, 46}, // cube index for max green
+		{"blue", Color{0, 0, 255}, 21},  // cube index for max blue
 		{"white", Color{255, 255, 255}, 231},
 		{"black", Color{0, 0, 0}, 16},
 		// Grays should map to grayscale ramp

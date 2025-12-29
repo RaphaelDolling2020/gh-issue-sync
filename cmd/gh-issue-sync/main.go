@@ -17,6 +17,7 @@ type Options struct {
 	Push   PushCommand   `command:"push" description:"Push local changes to GitHub" long-description:"Create or update GitHub issues based on local changes."`
 	Status StatusCommand `command:"status" description:"Show sync status" long-description:"Show local changes and last full pull time."`
 	New    NewCommand    `command:"new" description:"Create a new local issue" long-description:"Create a new local issue file. Use --edit to open an editor for the initial content."`
+	Edit   EditCommand   `command:"edit" description:"Open an issue in your editor" long-description:"Open an issue file in your preferred editor ($VISUAL, $EDITOR, or git core.editor)."`
 	Close  CloseCommand  `command:"close" description:"Mark an issue for closing" long-description:"Mark an issue as closed locally (use push to sync)." `
 	Reopen ReopenCommand `command:"reopen" description:"Reopen a closed issue" long-description:"Mark an issue as open locally (use push to sync)."`
 	Diff   DiffCommand   `command:"diff" description:"Show diff between local and original/remote" long-description:"Show what changed in a local issue compared to the last synced version or current remote state."`
@@ -63,6 +64,13 @@ type NewCommand struct {
 	} `positional-args:"yes"`
 }
 
+type EditCommand struct {
+	BaseCommand
+	Args struct {
+		Number string `positional-arg-name:"issue" description:"Issue number or local ID" required:"yes"`
+	} `positional-args:"yes"`
+}
+
 type CloseCommand struct {
 	BaseCommand
 	Reason string `long:"reason" choice:"completed" choice:"not_planned" value-name:"REASON" description:"Close reason (completed or not_planned)"`
@@ -104,6 +112,10 @@ func (c *StatusCommand) Usage() string {
 
 func (c *NewCommand) Usage() string {
 	return "[OPTIONS]"
+}
+
+func (c *EditCommand) Usage() string {
+	return "<issue>"
 }
 
 func (c *CloseCommand) Usage() string {
@@ -148,6 +160,17 @@ func (c *NewCommand) Execute(args []string) error {
 		title = args[0]
 	}
 	return c.App.NewIssue(context.Background(), title, app.NewOptions{Edit: c.Edit, Labels: c.Labels})
+}
+
+func (c *EditCommand) Execute(args []string) error {
+	number := c.Args.Number
+	if number == "" && len(args) > 0 {
+		number = args[0]
+	}
+	if strings.TrimSpace(number) == "" {
+		return fmt.Errorf("issue number is required")
+	}
+	return c.App.Edit(context.Background(), number)
 }
 
 func (c *CloseCommand) Execute(args []string) error {
@@ -195,6 +218,7 @@ func main() {
 	opts.Push.App = application
 	opts.Status.App = application
 	opts.New.App = application
+	opts.Edit.App = application
 	opts.Close.App = application
 	opts.Reopen.App = application
 	opts.Diff.App = application

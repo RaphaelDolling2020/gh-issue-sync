@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -637,6 +638,44 @@ func (a *App) Reopen(ctx context.Context, number string) error {
 	return nil
 }
 
+func (a *App) Edit(ctx context.Context, number string) error {
+	p := paths.New(a.Root)
+	file, err := findIssueByNumber(p, number)
+	if err != nil {
+		return err
+	}
+
+	if err := openEditor(ctx, file.Path); err != nil {
+		return err
+	}
+
+	// After editing, re-read and handle title changes (file may need renaming)
+	edited, err := issue.ParseFile(file.Path)
+	if err != nil {
+		return err
+	}
+
+	// Validate the issue number wasn't changed
+	if edited.Number != "" && edited.Number != file.Issue.Number {
+		return fmt.Errorf("issue number changed; expected %s, got %s", file.Issue.Number, edited.Number)
+	}
+
+	// Check if title changed and rename file accordingly
+	edited.Title = strings.TrimSpace(edited.Title)
+	if edited.Title == "" {
+		return fmt.Errorf("title is required")
+	}
+
+	newPath := issue.PathFor(dirForState(p, file.State), file.Issue.Number, edited.Title)
+	if file.Path != newPath {
+		if err := os.Rename(file.Path, newPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (a *App) Diff(ctx context.Context, number string, opts DiffOptions) error {
 	p := paths.New(a.Root)
 	cfg, err := loadConfig(p.ConfigPath)
@@ -1164,12 +1203,53 @@ func ptrTime(t time.Time) *time.Time {
 }
 
 func openEditor(ctx context.Context, path string) error {
-	editor := os.Getenv("EDITOR")
+	editor := getEditor(ctx)
 	if editor == "" {
-		return fmt.Errorf("EDITOR is not set (export EDITOR to your preferred editor)")
+		return fmt.Errorf("no editor configured (set $VISUAL, $EDITOR, or git core.editor)")
 	}
-	_, err := execCommand(ctx, editor, path)
-	return err
+	return runEditor(ctx, editor, path)
+}
+
+// getEditor returns the preferred editor command following the precedence:
+// $VISUAL > $EDITOR > git config core.editor > "vi"
+func getEditor(ctx context.Context) string {
+	if v := os.Getenv("VISUAL"); v != "" {
+		return v
+	}
+	if e := os.Getenv("EDITOR"); e != "" {
+		return e
+	}
+	// Try to get git's configured editor via `git var GIT_EDITOR`
+	// which respects GIT_EDITOR env, core.editor config, VISUAL, EDITOR in that order
+	if gitEditor, err := execCommand(ctx, "git", "var", "GIT_EDITOR"); err == nil {
+		if ed := strings.TrimSpace(gitEditor); ed != "" {
+			return ed
+		}
+	}
+	return "vi"
+}
+
+// runEditor runs an editor command with the given path, connecting to the terminal
+func runEditor(ctx context.Context, editor string, path string) error {
+	return runInteractiveCommand(ctx, editor, path)
+}
+
+// runInteractiveCommand runs a command with stdin/stdout/stderr connected to the terminal.
+// The command string may contain arguments (e.g., "code --wait").
+var runInteractiveCommand = func(ctx context.Context, command string, args ...string) error {
+	// Split the command to handle editors with arguments like "code --wait"
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return fmt.Errorf("empty command")
+	}
+	name := parts[0]
+	cmdArgs := append(parts[1:], args...)
+
+	cmd := exec.CommandContext(ctx, name, cmdArgs...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 var execCommand = func(ctx context.Context, name string, args ...string) (string, error) {

@@ -17,7 +17,7 @@ func TestDefaultTheme(t *testing.T) {
 
 func TestFormatStatus(t *testing.T) {
 	th := Default()
-	
+
 	// Each status should have color escape codes
 	for _, status := range []string{"A", "U", "M", "D"} {
 		result := th.FormatStatus(status)
@@ -33,7 +33,7 @@ func TestFormatStatus(t *testing.T) {
 func TestFormatIssueHeader(t *testing.T) {
 	th := Default()
 	result := th.FormatIssueHeader("U", "123", "Test issue")
-	
+
 	// Should contain the status, number, and title
 	if !strings.Contains(result, "#123") {
 		t.Errorf("Header missing issue number: %q", result)
@@ -50,7 +50,7 @@ func TestFormatIssueHeader(t *testing.T) {
 func TestFormatChange(t *testing.T) {
 	th := Default()
 	result := th.FormatChange("title", `"old"`, `"new"`)
-	
+
 	if !strings.Contains(result, "title:") {
 		t.Errorf("Change missing field name: %q", result)
 	}
@@ -67,7 +67,7 @@ func TestFormatChange(t *testing.T) {
 
 func TestFormatLabel(t *testing.T) {
 	th := Default()
-	
+
 	// Dark background should get light text
 	result := th.FormatLabel("bug", "d73a4a")
 	if !strings.Contains(result, "bug") {
@@ -76,13 +76,13 @@ func TestFormatLabel(t *testing.T) {
 	if !strings.Contains(result, "\x1b[") {
 		t.Errorf("Label has no escape codes: %q", result)
 	}
-	
+
 	// Light background should get dark text
 	result = th.FormatLabel("enhancement", "a2eeef")
 	if !strings.Contains(result, "enhancement") {
 		t.Errorf("Label missing name: %q", result)
 	}
-	
+
 	// Invalid color should return plain text
 	result = th.FormatLabel("test", "invalid")
 	if result != "test" {
@@ -92,13 +92,13 @@ func TestFormatLabel(t *testing.T) {
 
 func TestFormatLabelList(t *testing.T) {
 	th := Default()
-	
+
 	// Empty list
 	result := th.FormatLabelList(nil)
 	if !strings.Contains(result, "[]") {
 		t.Errorf("Empty list = %q, want []", result)
 	}
-	
+
 	// With labels
 	labels := []LabelColor{
 		{Name: "bug", Color: "d73a4a"},
@@ -115,12 +115,12 @@ func TestFormatLabelList(t *testing.T) {
 
 func TestFormatLabelChange(t *testing.T) {
 	th := Default()
-	
+
 	added := []LabelColor{{Name: "help wanted", Color: "008672"}}
 	removed := []LabelColor{{Name: "wontfix", Color: "ffffff"}}
-	
+
 	result := th.FormatLabelChange(added, removed)
-	
+
 	if !strings.Contains(result, "+") {
 		t.Errorf("Change missing + indicator: %q", result)
 	}
@@ -137,7 +137,7 @@ func TestFormatLabelChange(t *testing.T) {
 
 func TestConvenienceMethods(t *testing.T) {
 	th := Default()
-	
+
 	tests := []struct {
 		name   string
 		method func(string) string
@@ -148,7 +148,7 @@ func TestConvenienceMethods(t *testing.T) {
 		{"WarningText", th.WarningText},
 		{"MutedText", th.MutedText},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.method("test")

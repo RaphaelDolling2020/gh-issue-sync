@@ -50,8 +50,8 @@ func TestNewIssueFromEditor(t *testing.T) {
 		t.Fatalf("config: %v", err)
 	}
 
-	previousExec := execCommand
-	execCommand = func(ctx context.Context, name string, args ...string) (string, error) {
+	previousInteractive := runInteractiveCommand
+	runInteractiveCommand = func(ctx context.Context, command string, args ...string) error {
 		if len(args) == 0 {
 			t.Fatalf("expected editor path")
 		}
@@ -64,12 +64,12 @@ func TestNewIssueFromEditor(t *testing.T) {
 		if err != nil {
 			t.Fatalf("render: %v", err)
 		}
-		if err := os.WriteFile(args[0], []byte(payload), 0o644); err != nil {
+		if err := os.WriteFile(args[len(args)-1], []byte(payload), 0o644); err != nil {
 			t.Fatalf("write editor payload: %v", err)
 		}
-		return "", nil
+		return nil
 	}
-	t.Cleanup(func() { execCommand = previousExec })
+	t.Cleanup(func() { runInteractiveCommand = previousInteractive })
 	t.Setenv("EDITOR", "true")
 
 	application := New(root, ghcli.ExecRunner{}, io.Discard, io.Discard)
