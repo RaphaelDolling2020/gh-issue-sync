@@ -107,6 +107,25 @@ func (c *Client) ListIssues(ctx context.Context, state string, labels []string) 
 	return issues, nil
 }
 
+// EnrichWithRelationships fetches parent and blocking relationships for an issue via GraphQL
+// and updates the issue in place.
+func (c *Client) EnrichWithRelationships(ctx context.Context, iss *issue.Issue) error {
+	if iss.Number.IsLocal() {
+		return nil
+	}
+
+	rels, _, err := c.GetIssueRelationships(ctx, iss.Number.String())
+	if err != nil {
+		// Don't fail if relationships can't be fetched (e.g., feature not available)
+		return nil
+	}
+
+	iss.Parent = rels.Parent
+	iss.BlockedBy = rels.BlockedBy
+	iss.Blocks = rels.Blocks
+	return nil
+}
+
 func (c *Client) GetIssue(ctx context.Context, number string) (issue.Issue, error) {
 	args := []string{"issue", "view", number, "--json", "number,title,body,labels,assignees,milestone,state,stateReason"}
 	out, err := c.runner.Run(ctx, "gh", c.withRepo(args)...)

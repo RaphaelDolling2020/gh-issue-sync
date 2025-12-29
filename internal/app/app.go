@@ -178,6 +178,15 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 		}
 	}
 
+	// Enrich all remote issues with parent/blocking relationships via GraphQL
+	for i := range remoteIssues {
+		if err := client.EnrichWithRelationships(ctx, &remoteIssues[i]); err != nil {
+			// Log but don't fail - relationships are optional
+			fmt.Fprintf(a.Err, "%s fetching relationships for #%s: %v\n",
+				t.WarningText("Warning:"), remoteIssues[i].Number, err)
+		}
+	}
+
 	localIssues, err = loadLocalIssues(p)
 	if err != nil {
 		return err
@@ -372,6 +381,22 @@ func (a *App) Push(ctx context.Context, opts PushOptions, args []string) error {
 		if err != nil {
 			return err
 		}
+
+		// Sync relationships for newly created issues (now that T-numbers are resolved)
+		if !opts.DryRun {
+			for number := range createdNumbers {
+				// Find the issue in filteredIssues
+				for _, item := range filteredIssues {
+					if item.Issue.Number.String() == number {
+						if err := client.SyncRelationships(ctx, number, item.Issue); err != nil {
+							fmt.Fprintf(a.Err, "%s syncing relationships for #%s: %v\n",
+								t.WarningText("Warning:"), number, err)
+						}
+						break
+					}
+				}
+			}
+		}
 	}
 
 	var conflicts []string
@@ -395,6 +420,12 @@ func (a *App) Push(ctx context.Context, opts PushOptions, args []string) error {
 		remote, err := client.GetIssue(ctx, item.Issue.Number.String())
 		if err != nil {
 			return err
+		}
+		// Enrich with relationships for accurate conflict check
+		if err := client.EnrichWithRelationships(ctx, &remote); err != nil {
+			// Log but don't fail
+			fmt.Fprintf(a.Err, "%s fetching relationships for #%s: %v\n",
+				t.WarningText("Warning:"), item.Issue.Number, err)
 		}
 		if hasOriginal && !issue.EqualForConflictCheck(remote, original) {
 			conflicts = append(conflicts, item.Issue.Number.String())
@@ -421,6 +452,14 @@ func (a *App) Push(ctx context.Context, opts PushOptions, args []string) error {
 				return err
 			}
 		}
+
+		// Sync parent and blocking relationships via GraphQL
+		if err := client.SyncRelationships(ctx, item.Issue.Number.String(), item.Issue); err != nil {
+			// Log but don't fail - relationships might not be supported
+			fmt.Fprintf(a.Err, "%s syncing relationships for #%s: %v\n",
+				t.WarningText("Warning:"), item.Issue.Number, err)
+		}
+
 		item.Issue.SyncedAt = ptrTime(a.Now().UTC())
 		if err := issue.WriteFile(item.Path, item.Issue); err != nil {
 			return err
