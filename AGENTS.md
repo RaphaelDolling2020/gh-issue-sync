@@ -12,6 +12,8 @@ If the user did not give you a concrete task in their first message, read README
 go run ./cmd/gh-issue-sync pull
 cat .issues/open/NUMBER-*.md
 
+Don't use `gh issue view 42`, use `cat .issues/open/42-*.md` (unless you notice it's missing)
+
 ## Tools
 - Use our own github issue sync (go run ./cmd/gh-issue-sync) for most operations
 - GitHub CLI for issue comments/PRs
