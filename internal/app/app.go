@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/glamour"
 	"github.com/mitsuhiko/gh-issue-sync/internal/config"
 	"github.com/mitsuhiko/gh-issue-sync/internal/ghcli"
 	"github.com/mitsuhiko/gh-issue-sync/internal/issue"
@@ -52,6 +53,10 @@ type CloseOptions struct {
 
 type DiffOptions struct {
 	Remote bool
+}
+
+type ViewOptions struct {
+	Raw bool
 }
 
 type IssueFile struct {
@@ -811,6 +816,186 @@ func (a *App) Edit(ctx context.Context, number string) error {
 	}
 
 	return nil
+}
+
+func (a *App) View(ctx context.Context, ref string, opts ViewOptions) error {
+	p := paths.New(a.Root)
+
+	file, err := findIssueByRef(a.Root, p, ref)
+	if err != nil {
+		return err
+	}
+
+	if opts.Raw {
+		content, err := os.ReadFile(file.Path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(a.Out, string(content))
+		return nil
+	}
+
+	t := a.Theme
+	iss := file.Issue
+
+	// Title
+	fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("title:"), t.Bold(iss.Title))
+
+	// State
+	stateText := strings.ToUpper(iss.State)
+	if iss.StateReason != nil && *iss.StateReason != "" {
+		stateText = fmt.Sprintf("%s (%s)", stateText, *iss.StateReason)
+	}
+	fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("state:"), stateText)
+
+	// Number
+	fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("number:"), iss.Number.String())
+
+	// Labels
+	if len(iss.Labels) > 0 {
+		fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("labels:"), strings.Join(iss.Labels, ", "))
+	}
+
+	// Assignees
+	if len(iss.Assignees) > 0 {
+		fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("assignees:"), strings.Join(iss.Assignees, ", "))
+	}
+
+	// Milestone
+	if iss.Milestone != "" {
+		fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("milestone:"), iss.Milestone)
+	}
+
+	// Parent
+	if iss.Parent != nil {
+		fmt.Fprintf(a.Out, "%s\t#%s\n", t.MutedText("parent:"), iss.Parent.String())
+	}
+
+	// Blocked by
+	if len(iss.BlockedBy) > 0 {
+		refs := make([]string, len(iss.BlockedBy))
+		for i, r := range iss.BlockedBy {
+			refs[i] = "#" + r.String()
+		}
+		fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("blocked_by:"), strings.Join(refs, ", "))
+	}
+
+	// Blocks
+	if len(iss.Blocks) > 0 {
+		refs := make([]string, len(iss.Blocks))
+		for i, r := range iss.Blocks {
+			refs[i] = "#" + r.String()
+		}
+		fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("blocks:"), strings.Join(refs, ", "))
+	}
+
+	// Synced at with relative time
+	if iss.SyncedAt != nil {
+		relTime := formatRelativeTime(a.Now(), *iss.SyncedAt)
+		fmt.Fprintf(a.Out, "%s\t%s\n", t.MutedText("synced:"), relTime)
+	}
+
+	// Separator and body
+	fmt.Fprintln(a.Out, "--")
+	if strings.TrimSpace(iss.Body) != "" {
+		rendered, err := renderMarkdown(iss.Body)
+		if err != nil {
+			// Fall back to plain text on error
+			fmt.Fprintln(a.Out, iss.Body)
+		} else {
+			fmt.Fprint(a.Out, rendered)
+		}
+	}
+
+	return nil
+}
+
+// renderMarkdown renders markdown text for terminal output using glamour
+func renderMarkdown(text string) (string, error) {
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(80),
+	)
+	if err != nil {
+		return "", err
+	}
+	return renderer.Render(text)
+}
+
+// findIssueByRef finds an issue by number, local ID (T...), or file path
+func findIssueByRef(root string, p paths.Paths, ref string) (IssueFile, error) {
+	ref = strings.TrimSpace(ref)
+
+	// Check if it's a file path
+	if strings.HasSuffix(ref, ".md") || strings.Contains(ref, string(os.PathSeparator)) {
+		path := ref
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(root, path)
+		}
+		parsed, err := issue.ParseFile(path)
+		if err != nil {
+			return IssueFile{}, fmt.Errorf("failed to parse %s: %w", ref, err)
+		}
+		// Determine state from path
+		state := "open"
+		if strings.Contains(path, string(os.PathSeparator)+"closed"+string(os.PathSeparator)) {
+			state = "closed"
+		}
+		parsed.State = state
+		return IssueFile{Issue: parsed, Path: path, State: state}, nil
+	}
+
+	// Otherwise look up by number
+	return findIssueByNumber(p, ref)
+}
+
+// formatRelativeTime formats a time as a human-readable relative string
+func formatRelativeTime(now time.Time, t time.Time) string {
+	diff := now.Sub(t)
+	if diff < 0 {
+		diff = -diff
+	}
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		mins := int(diff.Minutes())
+		if mins == 1 {
+			return "1 minute ago"
+		}
+		return fmt.Sprintf("%d minutes ago", mins)
+	case diff < 24*time.Hour:
+		hours := int(diff.Hours())
+		if hours == 1 {
+			return "1 hour ago"
+		}
+		return fmt.Sprintf("%d hours ago", hours)
+	case diff < 7*24*time.Hour:
+		days := int(diff.Hours() / 24)
+		if days == 1 {
+			return "1 day ago"
+		}
+		return fmt.Sprintf("%d days ago", days)
+	case diff < 30*24*time.Hour:
+		weeks := int(diff.Hours() / 24 / 7)
+		if weeks == 1 {
+			return "1 week ago"
+		}
+		return fmt.Sprintf("%d weeks ago", weeks)
+	case diff < 365*24*time.Hour:
+		months := int(diff.Hours() / 24 / 30)
+		if months == 1 {
+			return "1 month ago"
+		}
+		return fmt.Sprintf("%d months ago", months)
+	default:
+		years := int(diff.Hours() / 24 / 365)
+		if years == 1 {
+			return "1 year ago"
+		}
+		return fmt.Sprintf("%d years ago", years)
+	}
 }
 
 func (a *App) Diff(ctx context.Context, number string, opts DiffOptions) error {

@@ -20,6 +20,7 @@ type Options struct {
 	Status     StatusCommand     `command:"status" description:"Show sync status" long-description:"Show local changes and last full pull time."`
 	New        NewCommand        `command:"new" description:"Create a new local issue" long-description:"Create a new local issue file. Use --edit to open an editor for the initial content."`
 	Edit       EditCommand       `command:"edit" description:"Open an issue in your editor" long-description:"Open an issue file in your preferred editor ($VISUAL, $EDITOR, or git core.editor)."`
+	View       ViewCommand       `command:"view" description:"View an issue" long-description:"Display an issue with nice formatting, showing metadata and body."`
 	Close      CloseCommand      `command:"close" description:"Mark an issue for closing" long-description:"Mark an issue as closed locally (use push to sync)." `
 	Reopen     ReopenCommand     `command:"reopen" description:"Reopen a closed issue" long-description:"Mark an issue as open locally (use push to sync)."`
 	Diff       DiffCommand       `command:"diff" description:"Show diff between local and original/remote" long-description:"Show what changed in a local issue compared to the last synced version or current remote state."`
@@ -89,6 +90,14 @@ type ReopenCommand struct {
 	} `positional-args:"yes"`
 }
 
+type ViewCommand struct {
+	BaseCommand
+	Raw  bool `long:"raw" description:"Show raw file content"`
+	Args struct {
+		Issue string `positional-arg-name:"issue" description:"Issue number, local ID, or path" required:"yes"`
+	} `positional-args:"yes"`
+}
+
 type DiffCommand struct {
 	BaseCommand
 	Remote bool `long:"remote" description:"Diff against current remote state instead of last synced original"`
@@ -131,6 +140,10 @@ func (c *CloseCommand) Usage() string {
 
 func (c *ReopenCommand) Usage() string {
 	return "[OPTIONS]"
+}
+
+func (c *ViewCommand) Usage() string {
+	return "[OPTIONS] <issue>"
 }
 
 func (c *DiffCommand) Usage() string {
@@ -206,6 +219,17 @@ func (c *ReopenCommand) Execute(args []string) error {
 	return c.App.Reopen(context.Background(), number)
 }
 
+func (c *ViewCommand) Execute(args []string) error {
+	issue := c.Args.Issue
+	if issue == "" && len(args) > 0 {
+		issue = args[0]
+	}
+	if strings.TrimSpace(issue) == "" {
+		return fmt.Errorf("issue is required")
+	}
+	return c.App.View(context.Background(), issue, app.ViewOptions{Raw: c.Raw})
+}
+
 func (c *DiffCommand) Execute(args []string) error {
 	number := c.Args.Number
 	if number == "" && len(args) > 0 {
@@ -254,6 +278,7 @@ func main() {
 	opts.Status.App = application
 	opts.New.App = application
 	opts.Edit.App = application
+	opts.View.App = application
 	opts.Close.App = application
 	opts.Reopen.App = application
 	opts.Diff.App = application
