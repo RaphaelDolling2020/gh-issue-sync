@@ -21,6 +21,13 @@ Agents can work with issues locally until you are ready to push. The tool
 also supports creating new issues locally with temporary IDs that get
 replaced with real issue numbers after pushing.
 
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=ClTvgE-sFls">
+    <img src="https://img.youtube.com/vi/ClTvgE-sFls/maxresdefault.jpg" alt="Watch the demo video" width="560">
+  </a>
+  <p><em>Watch the demo video</em></p>
+</div>
+
 ## Overview
 
 `gh-issue-sync` mirrors GitHub issues into a local `.issues/` directory as
