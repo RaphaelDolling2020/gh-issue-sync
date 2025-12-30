@@ -3,15 +3,23 @@
   <p><strong>gh-issue-sync: sync GitHub issues locally and back</strong></p>
 </div>
 
-`gh-issue-sync` is a simple command line tool that can sync GitHub issues to
-local Markdown files for offline editing, batch updates, and seamless
-integration with coding agents and back up.
+`gh-issue-sync` is a command line tool that syncs GitHub issues to local
+Markdown files for offline editing, batch updates, and integration with
+coding agents.
 
-The idea here is that you can bring in the state of a bunch of GitHub issues
-locally so that you can refine them with an agent until you're satisfied and
-sync back up the changes.  It can also be useful if you are working without
-internet for one reason or another and you want to have your issues readable
-locally.
+Pull issues locally, refine them until you are satisfied, and sync changes
+back. Also useful for offline access to your issues.
+
+## Why?
+
+When refining many issues at once, editing them on GitHub can be tedious.
+It is easier to make changes locally and push them all at once. This is
+particularly useful when using Claude Code or similar tools to refine
+issues iteratively.
+
+Agents can work with issues locally until you are ready to push. The tool
+also supports creating new issues locally with temporary IDs that get
+replaced with real issue numbers after pushing.
 
 ## Overview
 
@@ -32,7 +40,7 @@ Prerequisites:
 go install github.com/mitsuhiko/gh-issue-sync/cmd/gh-issue-sync@latest
 ```
 
-This installs the binary to `$GOBIN` (or `$GOPATH/bin`). Make sure it's in your `PATH`.
+This installs the binary to `$GOBIN` (or `$GOPATH/bin`). Make sure it is in your `PATH`.
 
 ### Build from source
 
@@ -110,20 +118,11 @@ This tool is designed to work with coding agents. Install the skill file so
 your agent knows how to use `gh-issue-sync`:
 
 ```bash
-# For Claude Code / Codex
-gh-issue-sync write-skill --agent codex
-
-# For Pi (shittycodingagent.ai)
-gh-issue-sync write-skill --agent pi
-
-# For Claude Desktop
-gh-issue-sync write-skill --agent claude
-
-# For OpenCode
-gh-issue-sync write-skill --agent opencode
-
-# For Amp or other agents using ~/.config/agents/
-gh-issue-sync write-skill --agent generic
+gh-issue-sync write-skill --agent codex     # Codex
+gh-issue-sync write-skill --agent pi        # For Pi
+gh-issue-sync write-skill --agent claude    # Claude Code
+gh-issue-sync write-skill --agent opencode  # OpenCode
+gh-issue-sync write-skill --agent generic   # Amp and others
 ```
 
 Use `--scope` to choose between user-level (default) or project-level installation:
@@ -154,10 +153,10 @@ You can also read or copy the skill file directly: [`skill/SKILL.md`](skill/SKIL
 
 ## Creating Local Issues
 
-Since the issue numbers come from github you can use temporary issue numbers
-until then.  `T42` or `TABC` are all valid temporary issue IDs.  But they need
-to start with a "T" so that we know they are temporary ones.  After synching
-they are given new numbers and all references are updated.
+Since issue numbers come from GitHub, you can use temporary issue numbers
+until then. `T42` or `TABC` are valid temporary issue IDs. They must start
+with "T" to mark them as temporary. After syncing, they receive real numbers
+and all references are updated.
 
 ### Sync Both Ways
 
@@ -176,13 +175,28 @@ gh-issue-sync sync --label bug
 
 ## Sync Behavior
 
-- New issues are created in `open/` or `closed/` based on their state
-- Existing issues are updated if unchanged locally
-- Local changes are preserved (conflicts are reported, not overwritten)
-- Original versions are stored in `.sync/originals/` for conflict detection
-- Local-only issues (T1, T2, etc.) are created on GitHub
+This is how issues are synced:
+
+### On Pull
+
+- New issues are saved to `open/` or `closed/` based on state
+- Existing issues are updated only if unchanged locally
+- Local changes are preserved; conflicts are reported but not overwritten
+- Deleted local files are restored from GitHub (if originals exist)
+- Use `--force` to overwrite local changes
+
+### On Push
+
+- Local issues (T1, T2, etc.) are created on GitHub
 - After creation, files are renamed with real issue numbers
 - References like `#T1` in other issues are automatically updated
+- Missing labels and milestones are created automatically
+- Changed issues are pushed; conflicts with remote changes are skipped
+
+### Conflict Detection
+
+Original versions are stored in `.issues/.sync/originals/` to enable
+three-way merge conflict detection between local, original, and remote.
 
 ### List Issues
 
@@ -203,12 +217,12 @@ gh-issue-sync list --search "error no:assignee sort:created-asc"
 ```
 
 The `--search` flag supports GitHub issue search syntax:
-- `is:open`, `is:closed` – Filter by state
-- `label:NAME` – Filter by label
-- `no:label`, `no:assignee`, `no:milestone` – Filter by missing field
-- `assignee:USER`, `author:USER`, `milestone:NAME` – Filter by field
-- `sort:created-asc`, `sort:created-desc` – Sort results
-- Free text – Search in title and body (case-insensitive)
+- `is:open`, `is:closed` - Filter by state
+- `label:NAME` - Filter by label
+- `no:label`, `no:assignee`, `no:milestone` - Filter by missing field
+- `assignee:USER`, `author:USER`, `milestone:NAME` - Filter by field
+- `sort:created-asc`, `sort:created-desc` - Sort results
+- Free text - Search in title and body (case-insensitive)
 
 ### Check Status
 
@@ -340,13 +354,13 @@ The slug is for readability only, the tool identifies issues by the number prefi
 | Changed | Same | Changed | **Conflict** – skip with warning |
 
 When a conflict occurs:
-- On **pull**: Local changes are preserved, remote update is skipped
-- On **push**: Remote changes are detected, local push is skipped
+- On **pull**: local changes are preserved, remote update is skipped
+- On **push**: remote changes are detected, local push is skipped
 - Use `--force` on pull to overwrite local changes
 
 ## License
 
-This code is 100% LLM generated. It is unclear if LLM generated code can be
-copyrighted.
+This code is entirely LLM generated. It is unclear if LLM generated code
+can be copyrighted.
 
 - License: [Apache-2.0](https://github.com/mitsuhiko/gh-issue-sync/blob/main/LICENSE)
