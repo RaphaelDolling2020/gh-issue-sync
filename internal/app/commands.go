@@ -227,6 +227,28 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 			}
 		}
 
+		// Author filter
+		if opts.Author != "" {
+			if !strings.EqualFold(opts.Author, item.Issue.Author) {
+				continue
+			}
+		}
+
+		// Milestone filter
+		if opts.Milestone != "" {
+			if !strings.EqualFold(opts.Milestone, item.Issue.Milestone) {
+				continue
+			}
+		}
+
+		// Mention filter (searches for @username in body)
+		if opts.Mention != "" {
+			mention := "@" + opts.Mention
+			if !strings.Contains(strings.ToLower(item.Issue.Body), strings.ToLower(mention)) {
+				continue
+			}
+		}
+
 		filtered = append(filtered, item)
 	}
 
@@ -239,6 +261,11 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 		}
 		return filtered[i].Issue.Number.String() < filtered[j].Issue.Number.String()
 	})
+
+	// Apply limit
+	if opts.Limit > 0 && len(filtered) > opts.Limit {
+		filtered = filtered[:opts.Limit]
+	}
 
 	if len(filtered) == 0 {
 		fmt.Fprintln(a.Out, t.MutedText("No issues found"))

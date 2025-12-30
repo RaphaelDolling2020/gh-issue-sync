@@ -52,12 +52,16 @@ type ViewOptions struct {
 }
 
 type ListOptions struct {
-	All      bool
-	State    string
-	Label    []string
-	Assignee string
-	Local    bool
-	Modified bool
+	All       bool
+	State     string
+	Label     []string
+	Assignee  string
+	Author    string
+	Milestone string
+	Mention   string
+	Limit     int
+	Local     bool
+	Modified  bool
 }
 
 func New(root string, runner ghcli.Runner, out io.Writer, errOut io.Writer) *App {

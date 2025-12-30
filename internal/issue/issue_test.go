@@ -99,3 +99,55 @@ func TestSlugify(t *testing.T) {
 		}
 	}
 }
+
+func TestInfoSectionRoundTrip(t *testing.T) {
+	input := strings.TrimSpace(`---
+title: "Test issue with author"
+state: open
+info:
+    author: testuser
+---
+Body
+`) + "\n"
+
+	parsed, err := Parse([]byte(input))
+	if err != nil {
+		t.Fatalf("parse failed: %v", err)
+	}
+	if parsed.Author != "testuser" {
+		t.Fatalf("expected author 'testuser', got %q", parsed.Author)
+	}
+
+	rendered, err := Render(parsed)
+	if err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+	if !strings.Contains(rendered, "info:") {
+		t.Fatalf("rendered should contain info section: %s", rendered)
+	}
+	if !strings.Contains(rendered, "author: testuser") {
+		t.Fatalf("rendered should contain author: %s", rendered)
+	}
+
+	parsedAgain, err := Parse([]byte(rendered))
+	if err != nil {
+		t.Fatalf("parse rendered failed: %v", err)
+	}
+	if parsedAgain.Author != "testuser" {
+		t.Fatalf("expected author 'testuser' after round-trip, got %q", parsedAgain.Author)
+	}
+}
+
+func TestInfoSectionOmittedWhenEmpty(t *testing.T) {
+	iss := Issue{
+		Title: "No author",
+		State: "open",
+	}
+	rendered, err := Render(iss)
+	if err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+	if strings.Contains(rendered, "info:") {
+		t.Fatalf("rendered should not contain info section when empty: %s", rendered)
+	}
+}

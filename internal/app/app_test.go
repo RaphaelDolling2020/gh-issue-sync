@@ -240,16 +240,19 @@ func TestList(t *testing.T) {
 
 	// Create some issues
 	issues := []struct {
-		num      string
-		title    string
-		state    string
-		labels   []string
-		assignee []string
+		num       string
+		title     string
+		state     string
+		labels    []string
+		assignee  []string
+		author    string
+		milestone string
+		body      string
 	}{
-		{"1", "Open Bug", "open", []string{"bug"}, []string{"alice"}},
-		{"2", "Open Feature", "open", []string{"enhancement"}, nil},
-		{"3", "Closed Bug", "closed", []string{"bug"}, nil},
-		{"T123", "Local Issue", "open", nil, nil},
+		{"1", "Open Bug", "open", []string{"bug"}, []string{"alice"}, "bob", "v1.0", "cc @charlie for review"},
+		{"2", "Open Feature", "open", []string{"enhancement"}, nil, "alice", "", ""},
+		{"3", "Closed Bug", "closed", []string{"bug"}, nil, "bob", "v1.0", ""},
+		{"T123", "Local Issue", "open", nil, nil, "", "", ""},
 	}
 
 	for _, iss := range issues {
@@ -263,6 +266,9 @@ func TestList(t *testing.T) {
 			State:     iss.state,
 			Labels:    iss.labels,
 			Assignees: iss.assignee,
+			Author:    iss.author,
+			Milestone: iss.milestone,
+			Body:      iss.body,
 		}
 		path := issue.PathFor(dir, i.Number, i.Title)
 		if err := issue.WriteFile(path, i); err != nil {
@@ -355,6 +361,56 @@ func TestList(t *testing.T) {
 	}
 	if strings.Contains(output, "#1") {
 		t.Fatalf("remote issue #1 should not be in --local: %s", output)
+	}
+
+	// Test: filter by author
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{All: true, Author: "bob"}); err != nil {
+		t.Fatalf("list --author bob: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "#1") || !strings.Contains(output, "#3") {
+		t.Fatalf("bob's issues should be in output: %s", output)
+	}
+	if strings.Contains(output, "#2") {
+		t.Fatalf("alice's issue should not be in --author bob: %s", output)
+	}
+
+	// Test: filter by milestone
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{All: true, Milestone: "v1.0"}); err != nil {
+		t.Fatalf("list --milestone v1.0: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "#1") || !strings.Contains(output, "#3") {
+		t.Fatalf("v1.0 milestone issues should be in output: %s", output)
+	}
+	if strings.Contains(output, "#2") {
+		t.Fatalf("issue without milestone should not be in --milestone v1.0: %s", output)
+	}
+
+	// Test: filter by mention
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{Mention: "charlie"}); err != nil {
+		t.Fatalf("list --mention charlie: %v", err)
+	}
+	output = out.String()
+	if !strings.Contains(output, "#1") {
+		t.Fatalf("issue mentioning charlie should be in output: %s", output)
+	}
+	if strings.Contains(output, "#2") {
+		t.Fatalf("issue not mentioning charlie should not be in --mention charlie: %s", output)
+	}
+
+	// Test: limit
+	out.Reset()
+	if err := application.List(context.Background(), ListOptions{All: true, Limit: 2}); err != nil {
+		t.Fatalf("list --limit 2: %v", err)
+	}
+	output = out.String()
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines with --limit 2, got %d: %s", len(lines), output)
 	}
 }
 

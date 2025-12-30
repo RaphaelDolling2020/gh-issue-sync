@@ -34,6 +34,15 @@ type Issue struct {
 	Blocks      []IssueRef
 	SyncedAt    *time.Time
 	Body        string
+
+	// Informational fields (read-only, not synced back to GitHub)
+	Author string
+}
+
+// InfoSection contains read-only informational fields that are synced from
+// GitHub but never written back. These are for display/filtering only.
+type InfoSection struct {
+	Author string `yaml:"author,omitempty"`
 }
 
 type FrontMatter struct {
@@ -49,6 +58,7 @@ type FrontMatter struct {
 	BlockedBy   []IssueRef `yaml:"blocked_by,omitempty"`
 	Blocks      []IssueRef `yaml:"blocks,omitempty"`
 	SyncedAt    *time.Time `yaml:"synced_at,omitempty"`
+	Info        *InfoSection `yaml:"info,omitempty"`
 }
 
 func (n IssueNumber) String() string {
@@ -141,6 +151,9 @@ func Parse(data []byte) (Issue, error) {
 		SyncedAt:    fm.SyncedAt,
 		Body:        normalizeBody(string(body)),
 	}
+	if fm.Info != nil {
+		issue.Author = fm.Info.Author
+	}
 	return issue, nil
 }
 
@@ -158,6 +171,9 @@ func Render(issue Issue) (string, error) {
 		BlockedBy:   sortedRefs(issue.BlockedBy),
 		Blocks:      sortedRefs(issue.Blocks),
 		SyncedAt:    issue.SyncedAt,
+	}
+	if issue.Author != "" {
+		fm.Info = &InfoSection{Author: issue.Author}
 	}
 	payload, err := yaml.Marshal(&fm)
 	if err != nil {

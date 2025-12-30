@@ -70,12 +70,16 @@ type StatusCommand struct {
 
 type ListCommand struct {
 	BaseCommand
-	All      bool     `long:"all" short:"a" description:"Include closed issues"`
-	State    string   `long:"state" choice:"open" choice:"closed" description:"Filter by state"`
-	Label    []string `long:"label" short:"l" value-name:"LABEL" description:"Filter by label (repeatable)"`
-	Assignee string   `long:"assignee" description:"Filter by assignee"`
-	Local    bool     `long:"local" description:"Show only local (unpushed) issues"`
-	Modified bool     `long:"modified" short:"m" description:"Show only modified issues"`
+	All       bool     `long:"all" short:"a" description:"Include closed issues"`
+	State     string   `long:"state" choice:"open" choice:"closed" description:"Filter by state"`
+	Label     []string `long:"label" short:"l" value-name:"LABEL" description:"Filter by label (repeatable)"`
+	Assignee  string   `long:"assignee" description:"Filter by assignee"`
+	Author    string   `long:"author" short:"A" description:"Filter by author"`
+	Milestone string   `long:"milestone" short:"M" description:"Filter by milestone"`
+	Mention   string   `long:"mention" description:"Filter by @mention in body"`
+	Limit     int      `long:"limit" short:"L" description:"Maximum number of issues to show"`
+	Local     bool     `long:"local" description:"Show only local (unpushed) issues"`
+	Modified  bool     `long:"modified" short:"m" description:"Show only modified issues"`
 }
 
 type NewCommand struct {
@@ -217,12 +221,16 @@ func (c *StatusCommand) Execute(_ []string) error {
 
 func (c *ListCommand) Execute(_ []string) error {
 	opts := app.ListOptions{
-		All:      c.All,
-		State:    c.State,
-		Label:    c.Label,
-		Assignee: c.Assignee,
-		Local:    c.Local,
-		Modified: c.Modified,
+		All:       c.All,
+		State:     c.State,
+		Label:     c.Label,
+		Assignee:  c.Assignee,
+		Author:    c.Author,
+		Milestone: c.Milestone,
+		Mention:   c.Mention,
+		Limit:     c.Limit,
+		Local:     c.Local,
+		Modified:  c.Modified,
 	}
 	return c.App.List(context.Background(), opts)
 }

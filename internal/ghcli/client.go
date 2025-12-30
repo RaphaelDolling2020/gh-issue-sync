@@ -111,6 +111,7 @@ type apiIssue struct {
 	Milestone   *apiMilestone `json:"milestone"`
 	State       string        `json:"state"`
 	StateReason *string       `json:"stateReason"`
+	Author      *apiUser      `json:"author"`
 }
 
 func (a apiIssue) ToIssue() issue.Issue {
@@ -126,6 +127,10 @@ func (a apiIssue) ToIssue() issue.Issue {
 	if a.Milestone != nil {
 		milestone = a.Milestone.Title
 	}
+	author := ""
+	if a.Author != nil {
+		author = a.Author.Login
+	}
 	return issue.Issue{
 		Number:      issue.IssueNumber(strconv.Itoa(a.Number)),
 		Title:       a.Title,
@@ -135,11 +140,12 @@ func (a apiIssue) ToIssue() issue.Issue {
 		State:       strings.ToLower(a.State),
 		StateReason: a.StateReason,
 		Body:        a.Body,
+		Author:      author,
 	}
 }
 
 func (c *Client) ListIssues(ctx context.Context, state string, labels []string) ([]issue.Issue, error) {
-	args := []string{"issue", "list", "--state", state, "--limit", "1000", "--json", "number,title,body,labels,assignees,milestone,state,stateReason"}
+	args := []string{"issue", "list", "--state", state, "--limit", "1000", "--json", "number,title,body,labels,assignees,milestone,state,stateReason,author"}
 	for _, label := range labels {
 		args = append(args, "--label", label)
 	}
@@ -237,6 +243,7 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
         body
         state
         stateReason
+        author { login }
         labels(first: 100) { nodes { name } }
         assignees(first: 100) { nodes { login } }
         milestone { title }
@@ -289,7 +296,10 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 							Body        string  `json:"body"`
 							State       string  `json:"state"`
 							StateReason *string `json:"stateReason"`
-							Labels      struct {
+							Author      *struct {
+								Login string `json:"login"`
+							} `json:"author"`
+							Labels struct {
 								Nodes []struct {
 									Name string `json:"name"`
 								} `json:"nodes"`
@@ -376,6 +386,11 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 				}
 			}
 
+			author := ""
+			if node.Author != nil {
+				author = node.Author.Login
+			}
+
 			iss := issue.Issue{
 				Number:      issue.IssueNumber(strconv.Itoa(node.Number)),
 				Title:       node.Title,
@@ -387,6 +402,7 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 				Milestone:   milestone,
 				IssueType:   issueType,
 				Projects:    projects,
+				Author:      author,
 			}
 
 			if node.Parent != nil {
