@@ -303,4 +303,7 @@ gh-issue-sync write-skill --output /path/to/skills/gh-issue-sync/
 
 ## License
 
-MIT
+This code is 100% LLM generated. It is unclear if LLM generated code can be
+copyrighted.
+
+- License: [Apache-2.0](https://github.com/mitsuhiko/gh-issue-sync/blob/main/LICENSE)
