@@ -369,6 +369,11 @@ func (p *progressReporter) lineWidthLocked() int {
 	if err != nil {
 		return 0
 	}
+	// Reserve one column to avoid terminal wrapping issues when writing
+	// to the last column. Some terminals wrap or truncate the last char.
+	if width > 0 {
+		width--
+	}
 	return width
 }
 
