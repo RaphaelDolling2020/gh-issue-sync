@@ -184,9 +184,16 @@ type ListIssuesResult struct {
 	LabelColors map[string]string
 }
 
+// ListIssuesOptions configures the ListIssuesWithRelationships query.
+type ListIssuesOptions struct {
+	State  string    // "open", "closed", or "all"
+	Labels []string  // Filter by labels
+	Since  time.Time // Only fetch issues updated after this time (zero means no filter)
+}
+
 // ListIssuesWithRelationships fetches issues with their relationships and label colors
 // using GraphQL with pagination. This is much faster than separate calls.
-func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, labels []string) (ListIssuesResult, error) {
+func (c *Client) ListIssuesWithRelationships(ctx context.Context, opts ListIssuesOptions) (ListIssuesResult, error) {
 	owner, repo := splitRepo(c.repo)
 	if owner == "" || repo == "" {
 		return ListIssuesResult{}, fmt.Errorf("invalid repository format")
@@ -194,17 +201,17 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 
 	// Map state to GraphQL enum
 	stateFilter := "OPEN"
-	if state == "closed" {
+	if opts.State == "closed" {
 		stateFilter = "CLOSED"
-	} else if state == "all" {
+	} else if opts.State == "all" {
 		stateFilter = ""
 	}
 
 	// Build label filter
 	labelFilter := ""
-	if len(labels) > 0 {
-		quoted := make([]string, len(labels))
-		for i, l := range labels {
+	if len(opts.Labels) > 0 {
+		quoted := make([]string, len(opts.Labels))
+		for i, l := range opts.Labels {
 			quoted[i] = fmt.Sprintf("%q", l)
 		}
 		labelFilter = fmt.Sprintf(", labels: [%s]", strings.Join(quoted, ", "))
@@ -213,6 +220,12 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 	stateArg := ""
 	if stateFilter != "" {
 		stateArg = fmt.Sprintf(", states: [%s]", stateFilter)
+	}
+
+	// Build since filter for incremental sync
+	sinceArg := ""
+	if !opts.Since.IsZero() {
+		sinceArg = fmt.Sprintf(", filterBy: {since: %q}", opts.Since.Format(time.RFC3339))
 	}
 
 	result := ListIssuesResult{
@@ -245,7 +258,7 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 		query := fmt.Sprintf(`query($owner: String!, $repo: String!) {
   repository(owner: $owner, name: $repo) {
     %s
-    issues(first: 100%s%s, after: %s) {
+    issues(first: 100%s%s%s, after: %s) {
       totalCount
       pageInfo {
         hasNextPage
@@ -271,7 +284,7 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
       }
     }
   }
-}`, labelsFragment, stateArg, labelFilter, cursorArg)
+}`, labelsFragment, stateArg, labelFilter, sinceArg, cursorArg)
 
 		args := []string{"api", "graphql",
 			"-f", fmt.Sprintf("query=%s", query),

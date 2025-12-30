@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mitsuhiko/gh-issue-sync/internal/config"
 	"github.com/mitsuhiko/gh-issue-sync/internal/ghcli"
@@ -69,9 +70,19 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 		progress := newProgressReporter(a.Err, a.Theme)
 		client.SetProgress(progress.Update)
 
-		// Collect issue numbers we need to fetch for closed issues
+		// Determine if we can do an incremental sync
+		// Incremental sync: only fetch issues updated since last pull
+		// We use "all" state for incremental sync to catch issues that were closed
+		var since time.Time
+		isIncremental := false
+		if cfg.Sync.LastFullPull != nil && !opts.All && !opts.Full && len(opts.Label) == 0 {
+			since = *cfg.Sync.LastFullPull
+			isIncremental = true
+		}
+
+		// Collect issue numbers we need to fetch for closed issues (only for full sync)
 		var toFetch []string
-		if !opts.All {
+		if !opts.All && !isIncremental {
 			// We don't know remote issue numbers yet, so we'll collect all local non-local issues
 			// and filter after we get the open issues
 			for _, local := range localIssues {
@@ -95,7 +106,16 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 		batchCh := make(chan batchResult, 1)
 
 		go func() {
-			r, e := client.ListIssuesWithRelationships(ctx, state, opts.Label)
+			listOpts := ghcli.ListIssuesOptions{
+				State:  state,
+				Labels: opts.Label,
+			}
+			if isIncremental {
+				// For incremental sync, fetch all states to catch closed issues
+				listOpts.State = "all"
+				listOpts.Since = since
+			}
+			r, e := client.ListIssuesWithRelationships(ctx, listOpts)
 			listCh <- listResult{r, e}
 		}()
 
@@ -116,6 +136,18 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 		remoteIssues = listRes.result.Issues
 		// Fetch all labels separately (GraphQL only returns first 100)
 		labelColors = a.fetchLabelColors(ctx, client)
+
+		if isIncremental && len(remoteIssues) == 0 {
+			// Nothing changed since last sync - fast path
+			// Still update the last pull timestamp
+			now := a.Now().UTC()
+			cfg.Sync.LastFullPull = &now
+			if err := config.Save(p.ConfigPath, cfg); err != nil {
+				return err
+			}
+			fmt.Fprintf(a.Out, "%s\n", t.MutedText("Nothing to pull: no issues updated since last sync"))
+			return nil
+		}
 
 		batchRes := <-batchCh
 		if batchRes.err == nil && len(batchRes.issues) > 0 {

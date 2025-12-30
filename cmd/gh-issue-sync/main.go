@@ -43,6 +43,7 @@ type PullCommand struct {
 	BaseCommand
 	All   bool     `long:"all" description:"Pull all issues (including closed)"`
 	Force bool     `long:"force" description:"Overwrite local changes"`
+	Full  bool     `long:"full" description:"Force full sync (bypass incremental)"`
 	Label []string `long:"label" value-name:"LABEL" description:"Filter by label (repeatable)"`
 	Args  struct {
 		Issues []string `positional-arg-name:"issue" description:"Issue numbers, local IDs, or paths to pull"`
@@ -61,6 +62,7 @@ type PushCommand struct {
 type SyncCommand struct {
 	BaseCommand
 	All   bool     `long:"all" description:"Pull all issues (including closed)"`
+	Full  bool     `long:"full" description:"Force full sync (bypass incremental)"`
 	Label []string `long:"label" value-name:"LABEL" description:"Filter by label (repeatable)"`
 }
 
@@ -193,7 +195,7 @@ func (c *InitCommand) Execute(_ []string) error {
 }
 
 func (c *PullCommand) Execute(args []string) error {
-	opts := app.PullOptions{All: c.All, Force: c.Force, Label: c.Label}
+	opts := app.PullOptions{All: c.All, Force: c.Force, Full: c.Full, Label: c.Label}
 	if len(c.Args.Issues) > 0 {
 		return c.App.Pull(context.Background(), opts, c.Args.Issues)
 	}
@@ -213,7 +215,7 @@ func (c *SyncCommand) Execute(_ []string) error {
 	if err := c.App.Push(ctx, app.PushOptions{}, nil); err != nil {
 		return err
 	}
-	return c.App.Pull(ctx, app.PullOptions{All: c.All, Force: true, Label: c.Label}, nil)
+	return c.App.Pull(ctx, app.PullOptions{All: c.All, Force: true, Full: c.Full, Label: c.Label}, nil)
 }
 
 func (c *StatusCommand) Execute(_ []string) error {

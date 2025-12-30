@@ -26,6 +26,7 @@ type App struct {
 type PullOptions struct {
 	All   bool
 	Force bool
+	Full  bool // Force full sync, bypassing incremental
 	Label []string
 }
 
