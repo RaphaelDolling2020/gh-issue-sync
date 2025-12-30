@@ -134,8 +134,6 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 			return listRes.err
 		}
 		remoteIssues = listRes.result.Issues
-		// Fetch all labels separately (GraphQL only returns first 100)
-		labelColors = a.fetchLabelColors(ctx, client)
 
 		if isIncremental && len(remoteIssues) == 0 {
 			// Nothing changed since last sync - fast path
@@ -162,6 +160,9 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 				}
 			}
 		}
+
+		// Fetch all labels separately (GraphQL only returns first 100)
+		labelColors = a.fetchLabelColors(ctx, client)
 	}
 
 	localIssues, err = loadLocalIssues(p)
