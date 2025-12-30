@@ -66,6 +66,9 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 			state = "all"
 		}
 
+		progress := newProgressReporter(a.Err, a.Theme)
+		client.SetProgress(progress.Update)
+
 		// Collect issue numbers we need to fetch for closed issues
 		var toFetch []string
 		if !opts.All {
@@ -106,6 +109,7 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 		}()
 
 		listRes := <-listCh
+		progress.Done()
 		if listRes.err != nil {
 			return listRes.err
 		}
@@ -218,13 +222,42 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 			}
 		}
 
-		// Fetch and save milestones to cache
-		milestones, err := client.ListMilestones(ctx)
-		if err != nil {
-			fmt.Fprintf(a.Err, "%s fetching milestones: %v\n", t.WarningText("Warning:"), err)
+		type milestonesResult struct {
+			items []ghcli.Milestone
+			err   error
+		}
+		type issueTypesResult struct {
+			items []ghcli.IssueType
+			err   error
+		}
+		type projectsResult struct {
+			items []ghcli.Project
+			err   error
+		}
+
+		milestonesCh := make(chan milestonesResult, 1)
+		issueTypesCh := make(chan issueTypesResult, 1)
+		projectsCh := make(chan projectsResult, 1)
+
+		go func() {
+			items, err := client.ListMilestones(ctx)
+			milestonesCh <- milestonesResult{items: items, err: err}
+		}()
+		go func() {
+			items, err := client.ListIssueTypes(ctx)
+			issueTypesCh <- issueTypesResult{items: items, err: err}
+		}()
+		go func() {
+			items, err := client.ListProjects(ctx)
+			projectsCh <- projectsResult{items: items, err: err}
+		}()
+
+		milestonesRes := <-milestonesCh
+		if milestonesRes.err != nil {
+			fmt.Fprintf(a.Err, "%s fetching milestones: %v\n", t.WarningText("Warning:"), milestonesRes.err)
 		} else {
-			entries := make([]MilestoneEntry, 0, len(milestones))
-			for _, m := range milestones {
+			entries := make([]MilestoneEntry, 0, len(milestonesRes.items))
+			for _, m := range milestonesRes.items {
 				entries = append(entries, MilestoneEntry{
 					Title:       m.Title,
 					Description: m.Description,
@@ -242,13 +275,12 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 			}
 		}
 
-		// Fetch and save issue types to cache (org repos only)
-		issueTypes, err := client.ListIssueTypes(ctx)
-		if err != nil {
-			fmt.Fprintf(a.Err, "%s fetching issue types: %v\n", t.WarningText("Warning:"), err)
-		} else if len(issueTypes) > 0 {
-			entries := make([]IssueTypeEntry, 0, len(issueTypes))
-			for _, it := range issueTypes {
+		issueTypesRes := <-issueTypesCh
+		if issueTypesRes.err != nil {
+			fmt.Fprintf(a.Err, "%s fetching issue types: %v\n", t.WarningText("Warning:"), issueTypesRes.err)
+		} else if len(issueTypesRes.items) > 0 {
+			entries := make([]IssueTypeEntry, 0, len(issueTypesRes.items))
+			for _, it := range issueTypesRes.items {
 				entries = append(entries, IssueTypeEntry{
 					ID:          it.ID,
 					Name:        it.Name,
@@ -265,13 +297,12 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 			}
 		}
 
-		// Fetch and save projects to cache (requires read:project scope)
-		projects, err := client.ListProjects(ctx)
-		if err != nil {
+		projectsRes := <-projectsCh
+		if projectsRes.err != nil {
 			// Don't warn - scope might not be available
-		} else if len(projects) > 0 {
-			entries := make([]ProjectEntry, 0, len(projects))
-			for _, proj := range projects {
+		} else if len(projectsRes.items) > 0 {
+			entries := make([]ProjectEntry, 0, len(projectsRes.items))
+			for _, proj := range projectsRes.items {
 				entries = append(entries, ProjectEntry{
 					ID:    proj.ID,
 					Title: proj.Title,

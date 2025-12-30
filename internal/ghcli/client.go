@@ -12,12 +12,38 @@ import (
 )
 
 type Client struct {
-	runner Runner
-	repo   string
+	runner   Runner
+	repo     string
+	progress func(ProgressEvent)
 }
 
 func NewClient(runner Runner, repo string) *Client {
 	return &Client{runner: runner, repo: repo}
+}
+
+type ProgressStage string
+
+const (
+	ProgressListIssuesPageStart ProgressStage = "list_issues_page_start"
+	ProgressListIssuesPageDone  ProgressStage = "list_issues_page_done"
+)
+
+type ProgressEvent struct {
+	Stage      ProgressStage
+	Page       int
+	Issues     int
+	PageIssues int
+	Total      int
+}
+
+func (c *Client) SetProgress(fn func(ProgressEvent)) {
+	c.progress = fn
+}
+
+func (c *Client) reportProgress(event ProgressEvent) {
+	if c.progress != nil {
+		c.progress(event)
+	}
 }
 
 func (c *Client) withRepo(args []string) []string {
@@ -151,7 +177,10 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 	// Paginate through issues, fetching labels on first page
 	var cursor *string
 	firstPage := true
+	page := 0
+	totalCount := 0
 	for {
+		page++
 		cursorArg := "null"
 		if cursor != nil {
 			cursorArg = fmt.Sprintf("%q", *cursor)
@@ -172,6 +201,7 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
   repository(owner: $owner, name: $repo) {
     %s
     issues(first: 100%s%s, after: %s) {
+      totalCount
       pageInfo {
         hasNextPage
         endCursor
@@ -201,6 +231,13 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 			"-F", fmt.Sprintf("repo=%s", repo),
 		}
 
+		c.reportProgress(ProgressEvent{
+			Stage:  ProgressListIssuesPageStart,
+			Page:   page,
+			Issues: len(result.Issues),
+			Total:  totalCount,
+		})
+
 		out, err := c.runner.Run(ctx, "gh", args...)
 		if err != nil {
 			return ListIssuesResult{}, err
@@ -216,7 +253,8 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 						} `json:"nodes"`
 					} `json:"labels"`
 					Issues struct {
-						PageInfo struct {
+						TotalCount int `json:"totalCount"`
+						PageInfo   struct {
 							HasNextPage bool   `json:"hasNextPage"`
 							EndCursor   string `json:"endCursor"`
 						} `json:"pageInfo"`
@@ -278,6 +316,8 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 			return ListIssuesResult{}, fmt.Errorf("GraphQL error: %s", resp.Errors[0].Message)
 		}
 
+		totalCount = resp.Data.Repository.Issues.TotalCount
+
 		// Parse labels from first page
 		if firstPage {
 			for _, l := range resp.Data.Repository.Labels.Nodes {
@@ -337,6 +377,14 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 
 			result.Issues = append(result.Issues, iss)
 		}
+
+		c.reportProgress(ProgressEvent{
+			Stage:      ProgressListIssuesPageDone,
+			Page:       page,
+			Issues:     len(result.Issues),
+			PageIssues: len(resp.Data.Repository.Issues.Nodes),
+			Total:      totalCount,
+		})
 
 		if !resp.Data.Repository.Issues.PageInfo.HasNextPage {
 			break
