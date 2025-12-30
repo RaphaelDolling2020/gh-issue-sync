@@ -377,7 +377,11 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 		fmt.Fprintf(a.Err, "%s %s\n", t.WarningText("Conflicts (local changes, skipped):"), strings.Join(conflicts, ", "))
 	}
 	if unchanged > 0 {
-		fmt.Fprintf(a.Out, "%s\n", t.MutedText(fmt.Sprintf("No changes needed for %d issue(s)", unchanged)))
+		noun := "issues"
+		if unchanged == 1 {
+			noun = "issue"
+		}
+		fmt.Fprintf(a.Out, "%s\n", t.MutedText(fmt.Sprintf("Nothing to pull: %d %s up to date", unchanged, noun)))
 	}
 
 	// Restore locally deleted issues (originals exist but no local file)
@@ -776,7 +780,11 @@ func (a *App) Push(ctx context.Context, opts PushOptions, args []string) error {
 		fmt.Fprintf(a.Err, "%s %s\n", t.WarningText("Conflicts (remote changed, skipped):"), strings.Join(conflicts, ", "))
 	}
 	if unchanged > 0 {
-		fmt.Fprintf(a.Out, "%s\n", t.MutedText(fmt.Sprintf("No changes needed for %d issue(s)", unchanged)))
+		noun := "issues"
+		if unchanged == 1 {
+			noun = "issue"
+		}
+		fmt.Fprintf(a.Out, "%s\n", t.MutedText(fmt.Sprintf("Nothing to push: %d %s up to date", unchanged, noun)))
 	}
 	return nil
 }
