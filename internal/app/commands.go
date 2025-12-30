@@ -264,10 +264,18 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 
 		// Apply search query filters
 		if searchQuery != nil {
-			var syncedAt *int64
+			var syncedAt, createdAt, updatedAt *int64
 			if item.Issue.SyncedAt != nil {
 				ts := item.Issue.SyncedAt.Unix()
 				syncedAt = &ts
+			}
+			if item.Issue.CreatedAt != nil {
+				ts := item.Issue.CreatedAt.Unix()
+				createdAt = &ts
+			}
+			if item.Issue.UpdatedAt != nil {
+				ts := item.Issue.UpdatedAt.Unix()
+				updatedAt = &ts
 			}
 			issueData := search.IssueData{
 				Number:    item.Issue.Number,
@@ -281,6 +289,8 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 				IssueType: item.Issue.IssueType,
 				Projects:  item.Issue.Projects,
 				SyncedAt:  syncedAt,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			}
 			// Skip state check in Match since we already handled it above
 			queryForMatch := *searchQuery
@@ -294,18 +304,23 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 	}
 
 	// Sort based on search query or default
-	if searchQuery != nil && (searchQuery.SortField != "created" || searchQuery.SortAsc) {
+	if searchQuery != nil && searchQuery.SortField != "" {
 		// Convert to IssueData for sorting
 		issueDataList := make([]search.IssueData, len(filtered))
 		for i, item := range filtered {
-			var syncedAt *int64
-			if item.Issue.SyncedAt != nil {
-				ts := item.Issue.SyncedAt.Unix()
-				syncedAt = &ts
+			var createdAt, updatedAt *int64
+			if item.Issue.CreatedAt != nil {
+				ts := item.Issue.CreatedAt.Unix()
+				createdAt = &ts
+			}
+			if item.Issue.UpdatedAt != nil {
+				ts := item.Issue.UpdatedAt.Unix()
+				updatedAt = &ts
 			}
 			issueDataList[i] = search.IssueData{
-				Number:   item.Issue.Number,
-				SyncedAt: syncedAt,
+				Number:    item.Issue.Number,
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
 			}
 		}
 		searchQuery.Sort(issueDataList)

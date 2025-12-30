@@ -191,6 +191,8 @@ type IssueData struct {
 	IssueType string
 	Projects  []string
 	SyncedAt  *int64 // Unix timestamp, nil if not synced
+	CreatedAt *int64 // Unix timestamp from GitHub
+	UpdatedAt *int64 // Unix timestamp from GitHub
 }
 
 // Match returns true if the issue matches the query.
@@ -281,10 +283,19 @@ func (q *Query) Match(iss IssueData) bool {
 // Sort sorts issues according to the query's sort specification.
 func (q *Query) Sort(issues []IssueData) {
 	sort.SliceStable(issues, func(i, j int) bool {
-		ti := issues[i].SyncedAt
-		tj := issues[j].SyncedAt
+		// Select timestamp based on sort field
+		var ti, tj *int64
+		switch q.SortField {
+		case "created":
+			ti, tj = issues[i].CreatedAt, issues[j].CreatedAt
+		case "updated":
+			ti, tj = issues[i].UpdatedAt, issues[j].UpdatedAt
+		default:
+			// Default to created for unknown sort fields
+			ti, tj = issues[i].CreatedAt, issues[j].CreatedAt
+		}
 
-		// Issues without SyncedAt (local issues) always go to the end
+		// Issues without timestamps (local issues) always go to the end
 		if ti == nil && tj == nil {
 			return false
 		}
@@ -295,18 +306,13 @@ func (q *Query) Sort(issues []IssueData) {
 			return true // i goes before j
 		}
 
-		// Both have timestamps, compare based on sort field
+		// Both have timestamps, compare
 		var cmp int
-		switch q.SortField {
-		case "created", "updated":
-			if *ti < *tj {
-				cmp = -1
-			} else if *ti > *tj {
-				cmp = 1
-			} else {
-				cmp = 0
-			}
-		default:
+		if *ti < *tj {
+			cmp = -1
+		} else if *ti > *tj {
+			cmp = 1
+		} else {
 			cmp = 0
 		}
 

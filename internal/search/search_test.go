@@ -355,10 +355,10 @@ func TestSort(t *testing.T) {
 	ts3 := int64(3000)
 
 	issues := []IssueData{
-		{Number: issue.IssueNumber("2"), Title: "Second", SyncedAt: &ts2},
-		{Number: issue.IssueNumber("1"), Title: "First", SyncedAt: &ts1},
-		{Number: issue.IssueNumber("3"), Title: "Third", SyncedAt: &ts3},
-		{Number: issue.IssueNumber("T1"), Title: "Local", SyncedAt: nil},
+		{Number: issue.IssueNumber("2"), Title: "Second", CreatedAt: &ts2},
+		{Number: issue.IssueNumber("1"), Title: "First", CreatedAt: &ts1},
+		{Number: issue.IssueNumber("3"), Title: "Third", CreatedAt: &ts3},
+		{Number: issue.IssueNumber("T1"), Title: "Local", CreatedAt: nil},
 	}
 
 	t.Run("sort created-desc (default)", func(t *testing.T) {
@@ -382,6 +382,29 @@ func TestSort(t *testing.T) {
 		// Should be: T1 (nil first when asc), 1, 2, 3
 		// Wait, nil should still go after synced issues
 		if sorted[0].Number != "1" || sorted[1].Number != "2" || sorted[2].Number != "3" || sorted[3].Number != "T1" {
+			t.Errorf("unexpected order: %v %v %v %v", sorted[0].Number, sorted[1].Number, sorted[2].Number, sorted[3].Number)
+		}
+	})
+
+	t.Run("sort updated-desc", func(t *testing.T) {
+		// Create issues with different created/updated times
+		u1 := int64(3000) // issue 1 updated most recently
+		u2 := int64(1000)
+		u3 := int64(2000)
+		issuesWithUpdated := []IssueData{
+			{Number: issue.IssueNumber("2"), Title: "Second", CreatedAt: &ts2, UpdatedAt: &u2},
+			{Number: issue.IssueNumber("1"), Title: "First", CreatedAt: &ts1, UpdatedAt: &u1},
+			{Number: issue.IssueNumber("3"), Title: "Third", CreatedAt: &ts3, UpdatedAt: &u3},
+			{Number: issue.IssueNumber("T1"), Title: "Local", CreatedAt: nil, UpdatedAt: nil},
+		}
+
+		q := Parse("sort:updated-desc")
+		sorted := make([]IssueData, len(issuesWithUpdated))
+		copy(sorted, issuesWithUpdated)
+		q.Sort(sorted)
+
+		// Should be: 1 (updated 3000), 3 (updated 2000), 2 (updated 1000), T1 (nil at end)
+		if sorted[0].Number != "1" || sorted[1].Number != "3" || sorted[2].Number != "2" || sorted[3].Number != "T1" {
 			t.Errorf("unexpected order: %v %v %v %v", sorted[0].Number, sorted[1].Number, sorted[2].Number, sorted[3].Number)
 		}
 	})

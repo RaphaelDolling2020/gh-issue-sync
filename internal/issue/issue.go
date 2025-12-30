@@ -36,13 +36,17 @@ type Issue struct {
 	Body        string
 
 	// Informational fields (read-only, not synced back to GitHub)
-	Author string
+	Author    string
+	CreatedAt *time.Time
+	UpdatedAt *time.Time
 }
 
 // InfoSection contains read-only informational fields that are synced from
 // GitHub but never written back. These are for display/filtering only.
 type InfoSection struct {
-	Author string `yaml:"author,omitempty"`
+	Author    string     `yaml:"author,omitempty"`
+	CreatedAt *time.Time `yaml:"created_at,omitempty"`
+	UpdatedAt *time.Time `yaml:"updated_at,omitempty"`
 }
 
 type FrontMatter struct {
@@ -153,6 +157,8 @@ func Parse(data []byte) (Issue, error) {
 	}
 	if fm.Info != nil {
 		issue.Author = fm.Info.Author
+		issue.CreatedAt = fm.Info.CreatedAt
+		issue.UpdatedAt = fm.Info.UpdatedAt
 	}
 	return issue, nil
 }
@@ -172,8 +178,12 @@ func Render(issue Issue) (string, error) {
 		Blocks:      sortedRefs(issue.Blocks),
 		SyncedAt:    issue.SyncedAt,
 	}
-	if issue.Author != "" {
-		fm.Info = &InfoSection{Author: issue.Author}
+	if issue.Author != "" || issue.CreatedAt != nil || issue.UpdatedAt != nil {
+		fm.Info = &InfoSection{
+			Author:    issue.Author,
+			CreatedAt: issue.CreatedAt,
+			UpdatedAt: issue.UpdatedAt,
+		}
 	}
 	payload, err := yaml.Marshal(&fm)
 	if err != nil {

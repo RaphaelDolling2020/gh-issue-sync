@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mitsuhiko/gh-issue-sync/internal/issue"
 )
@@ -112,6 +113,8 @@ type apiIssue struct {
 	State       string        `json:"state"`
 	StateReason *string       `json:"stateReason"`
 	Author      *apiUser      `json:"author"`
+	CreatedAt   string        `json:"createdAt"`
+	UpdatedAt   string        `json:"updatedAt"`
 }
 
 func (a apiIssue) ToIssue() issue.Issue {
@@ -131,7 +134,7 @@ func (a apiIssue) ToIssue() issue.Issue {
 	if a.Author != nil {
 		author = a.Author.Login
 	}
-	return issue.Issue{
+	iss := issue.Issue{
 		Number:      issue.IssueNumber(strconv.Itoa(a.Number)),
 		Title:       a.Title,
 		Labels:      labels,
@@ -142,6 +145,17 @@ func (a apiIssue) ToIssue() issue.Issue {
 		Body:        a.Body,
 		Author:      author,
 	}
+	if a.CreatedAt != "" {
+		if t, err := time.Parse(time.RFC3339, a.CreatedAt); err == nil {
+			iss.CreatedAt = &t
+		}
+	}
+	if a.UpdatedAt != "" {
+		if t, err := time.Parse(time.RFC3339, a.UpdatedAt); err == nil {
+			iss.UpdatedAt = &t
+		}
+	}
+	return iss
 }
 
 func (c *Client) ListIssues(ctx context.Context, state string, labels []string) ([]issue.Issue, error) {
@@ -243,6 +257,8 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
         body
         state
         stateReason
+        createdAt
+        updatedAt
         author { login }
         labels(first: 100) { nodes { name } }
         assignees(first: 100) { nodes { login } }
@@ -296,6 +312,8 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 							Body        string  `json:"body"`
 							State       string  `json:"state"`
 							StateReason *string `json:"stateReason"`
+							CreatedAt   string  `json:"createdAt"`
+							UpdatedAt   string  `json:"updatedAt"`
 							Author      *struct {
 								Login string `json:"login"`
 							} `json:"author"`
@@ -405,6 +423,18 @@ func (c *Client) ListIssuesWithRelationships(ctx context.Context, state string, 
 				Author:      author,
 			}
 
+			// Parse timestamps
+			if node.CreatedAt != "" {
+				if t, err := time.Parse(time.RFC3339, node.CreatedAt); err == nil {
+					iss.CreatedAt = &t
+				}
+			}
+			if node.UpdatedAt != "" {
+				if t, err := time.Parse(time.RFC3339, node.UpdatedAt); err == nil {
+					iss.UpdatedAt = &t
+				}
+			}
+
 			if node.Parent != nil {
 				ref := issue.IssueRef(strconv.Itoa(node.Parent.Number))
 				iss.Parent = &ref
@@ -495,7 +525,7 @@ func (c *Client) EnrichWithRelationshipsBatch(ctx context.Context, issues []issu
 }
 
 func (c *Client) GetIssue(ctx context.Context, number string) (issue.Issue, error) {
-	args := []string{"issue", "view", number, "--json", "number,title,body,labels,assignees,milestone,state,stateReason"}
+	args := []string{"issue", "view", number, "--json", "number,title,body,labels,assignees,milestone,state,stateReason,author,createdAt,updatedAt"}
 	out, err := c.runner.Run(ctx, "gh", c.withRepo(args)...)
 	if err != nil {
 		return issue.Issue{}, err
@@ -532,6 +562,9 @@ func (c *Client) GetIssuesBatch(ctx context.Context, numbers []string) (map[stri
       body
       state
       stateReason
+      createdAt
+      updatedAt
+      author { login }
       labels(first: 100) { nodes { name } }
       assignees(first: 100) { nodes { login } }
       milestone { title }
@@ -596,7 +629,12 @@ func (c *Client) GetIssuesBatch(ctx context.Context, numbers []string) (map[stri
 			Body        string  `json:"body"`
 			State       string  `json:"state"`
 			StateReason *string `json:"stateReason"`
-			Labels      struct {
+			CreatedAt   string  `json:"createdAt"`
+			UpdatedAt   string  `json:"updatedAt"`
+			Author      *struct {
+				Login string `json:"login"`
+			} `json:"author"`
+			Labels struct {
 				Nodes []struct {
 					Name string `json:"name"`
 				} `json:"nodes"`
@@ -660,6 +698,11 @@ func (c *Client) GetIssuesBatch(ctx context.Context, numbers []string) (map[stri
 			}
 		}
 
+		author := ""
+		if issueData.Author != nil {
+			author = issueData.Author.Login
+		}
+
 		iss := issue.Issue{
 			Number:      issue.IssueNumber(strconv.Itoa(issueData.Number)),
 			Title:       issueData.Title,
@@ -671,6 +714,19 @@ func (c *Client) GetIssuesBatch(ctx context.Context, numbers []string) (map[stri
 			Milestone:   milestone,
 			IssueType:   issueType,
 			Projects:    projects,
+			Author:      author,
+		}
+
+		// Parse timestamps
+		if issueData.CreatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, issueData.CreatedAt); err == nil {
+				iss.CreatedAt = &t
+			}
+		}
+		if issueData.UpdatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, issueData.UpdatedAt); err == nil {
+				iss.UpdatedAt = &t
+			}
 		}
 
 		if issueData.Parent != nil {
