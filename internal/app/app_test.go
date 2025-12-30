@@ -411,8 +411,9 @@ func TestList(t *testing.T) {
 	}
 	output = out.String()
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("expected 2 lines with --limit 2, got %d: %s", len(lines), output)
+	// Each issue now takes 2 lines (title + metadata), so 2 issues = 4 lines
+	if len(lines) != 4 {
+		t.Fatalf("expected 4 lines with --limit 2 (2 issues x 2 lines each), got %d: %s", len(lines), output)
 	}
 
 	// Test: search with free text

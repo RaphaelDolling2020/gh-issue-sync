@@ -372,6 +372,7 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 func (a *App) printIssueLine(item IssueFile, labelColors map[string]string, pendingComments map[string]PendingComment) {
 	t := a.Theme
 	iss := item.Issue
+	termWidth := getTerminalWidth(a.Out)
 
 	// Issue number
 	numRaw := iss.Number.String()
@@ -385,11 +386,45 @@ func (a *App) printIssueLine(item IssueFile, labelColors map[string]string, pend
 		numDisplay = t.AccentText(numRaw)
 	}
 
-	// Title (truncate if too long)
+	// Title - use remaining width after number
 	title := iss.Title
-	maxTitleLen := 50
+	numWidth := 8 // padded number width including spacing
+	maxTitleLen := 80
+	if termWidth > 0 && termWidth-numWidth < maxTitleLen {
+		maxTitleLen = termWidth - numWidth
+	}
+	if maxTitleLen < 20 {
+		maxTitleLen = 20
+	}
 	if len(title) > maxTitleLen {
 		title = title[:maxTitleLen-3] + "..."
+	}
+
+	// First line: number + title
+	line1 := padRight(numDisplay, 8) + title
+	if termWidth > 0 {
+		line1 = truncateAnsi(line1, termWidth, t.Styler().Reset())
+	}
+	fmt.Fprintln(a.Out, line1)
+
+	// Second line: "by $NAME, X ago   LABELS   (+comment)"
+	var line2Parts []string
+
+	// Author and date: "by $NAME, X ago"
+	author := iss.Author
+	if author == "" && iss.Number.IsLocal() {
+		author = "$USER"
+	}
+	if author != "" {
+		byPart := "by " + author
+		if iss.CreatedAt != nil {
+			relTime := formatRelativeTime(a.Now(), *iss.CreatedAt)
+			byPart += ", " + relTime
+		}
+		line2Parts = append(line2Parts, t.MutedText(byPart))
+	} else if iss.CreatedAt != nil {
+		relTime := formatRelativeTime(a.Now(), *iss.CreatedAt)
+		line2Parts = append(line2Parts, t.MutedText(relTime))
 	}
 
 	// Labels
@@ -402,44 +437,25 @@ func (a *App) printIssueLine(item IssueFile, labelColors map[string]string, pend
 			labelStrs = append(labelStrs, t.MutedText(label))
 		}
 	}
-	labelDisplay := strings.Join(labelStrs, " ")
-
-	// Assignees
-	var assigneeDisplay string
-	if len(iss.Assignees) > 0 {
-		assignees := make([]string, len(iss.Assignees))
-		for i, a := range iss.Assignees {
-			assignees[i] = "@" + a
-		}
-		assigneeDisplay = t.MutedText(strings.Join(assignees, ", "))
+	if len(labelStrs) > 0 {
+		line2Parts = append(line2Parts, strings.Join(labelStrs, " "))
 	}
 
 	// Check for pending comment
-	var commentIndicator string
 	if pendingComments != nil {
 		if _, hasComment := pendingComments[iss.Number.String()]; hasComment {
-			commentIndicator = t.WarningText("(+comment)")
+			line2Parts = append(line2Parts, t.WarningText("(+comment)"))
 		}
 	}
 
-	// Build output line with proper padding
-	line := padRight(numDisplay, 6) + "  " + padRight(title, 50)
-	if labelDisplay != "" {
-		line += "  " + labelDisplay
+	// Print second line if there's any metadata
+	if len(line2Parts) > 0 {
+		line2 := "        " + strings.Join(line2Parts, "   ")
+		if termWidth > 0 {
+			line2 = truncateAnsi(line2, termWidth, t.Styler().Reset())
+		}
+		fmt.Fprintln(a.Out, line2)
 	}
-	if commentIndicator != "" {
-		line += "  " + commentIndicator
-	}
-	if assigneeDisplay != "" {
-		line += "  " + assigneeDisplay
-	}
-
-	// Truncate to terminal width to avoid wrapping
-	if width := getTerminalWidth(a.Out); width > 0 {
-		line = truncateAnsi(line, width, t.Styler().Reset())
-	}
-
-	fmt.Fprintln(a.Out, line)
 }
 
 func (a *App) NewIssue(ctx context.Context, title string, opts NewOptions) error {

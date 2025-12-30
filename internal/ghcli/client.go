@@ -821,18 +821,25 @@ func parseIssueNumber(output string) (string, error) {
 }
 
 // ListLabels fetches all labels from the repository with their colors.
+// Uses the GitHub API with pagination to fetch all labels (gh label list is limited to 1000).
 func (c *Client) ListLabels(ctx context.Context) ([]Label, error) {
-	args := []string{"label", "list", "--json", "name,color", "--limit", "1000"}
-	out, err := c.runner.Run(ctx, "gh", c.withRepo(args)...)
+	endpoint := fmt.Sprintf("repos/%s/labels", c.repo)
+	args := []string{"api", endpoint, "--paginate", "-q", ".[] | {name, color}"}
+	out, err := c.runner.Run(ctx, "gh", args...)
 	if err != nil {
 		return nil, err
 	}
-	var payload []apiLabel
-	if err := json.Unmarshal([]byte(out), &payload); err != nil {
-		return nil, err
-	}
-	labels := make([]Label, 0, len(payload))
-	for _, l := range payload {
+	// Output is newline-delimited JSON objects
+	var labels []Label
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var l apiLabel
+		if err := json.Unmarshal([]byte(line), &l); err != nil {
+			return nil, fmt.Errorf("failed to parse label JSON %q: %w", line, err)
+		}
 		labels = append(labels, Label{Name: l.Name, Color: l.Color})
 	}
 	return labels, nil

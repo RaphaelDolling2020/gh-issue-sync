@@ -114,7 +114,8 @@ func (a *App) Pull(ctx context.Context, opts PullOptions, args []string) error {
 			return listRes.err
 		}
 		remoteIssues = listRes.result.Issues
-		labelColors = listRes.result.LabelColors
+		// Fetch all labels separately (GraphQL only returns first 100)
+		labelColors = a.fetchLabelColors(ctx, client)
 
 		batchRes := <-batchCh
 		if batchRes.err == nil && len(batchRes.issues) > 0 {
