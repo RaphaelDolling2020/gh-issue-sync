@@ -147,6 +147,23 @@ Reopen an issue:
 gh-issue-sync reopen 42
 ```
 
+## Pending Comments
+
+Queue a comment to be posted when pushing an issue:
+```bash
+# Create a comment file for issue #42
+echo "Updated based on review feedback." > .issues/open/42.comment.md
+
+# The comment is posted on push and the file is deleted
+gh-issue-sync push
+```
+
+The comment file name must be `{number}.comment.md` (e.g., `42.comment.md`).
+Comments are posted after the issue is updated. Skip with `--no-comments`:
+```bash
+gh-issue-sync push --no-comments
+```
+
 ## Checking Status
 
 Show local changes not yet pushed:
@@ -213,6 +230,19 @@ If GitHub has newer changes than your local copy:
 - Pull skips that issue (shows as conflict)
 - Use `gh-issue-sync pull --force` to overwrite local changes
 - Or manually resolve and push
+
+### Adding Comments with Updates
+When making changes to an issue, you can add a comment explaining the changes:
+```bash
+# Edit the issue
+gh-issue-sync edit 42
+
+# Add a comment to be posted with the update
+echo "Refined acceptance criteria based on stakeholder feedback." > .issues/open/42.comment.md
+
+# Push both the changes and the comment
+gh-issue-sync push
+```
 
 ## Quick Reference
 

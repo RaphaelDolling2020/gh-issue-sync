@@ -421,5 +421,78 @@ func (a *App) Push(ctx context.Context, opts PushOptions, args []string) error {
 		}
 		fmt.Fprintf(a.Out, "%s\n", t.MutedText(fmt.Sprintf("Nothing to push: %d %s up to date", unchanged, noun)))
 	}
+
+	// Handle pending comments (unless --no-comments)
+	if !opts.NoComments {
+		pendingComments := loadAllPendingComments(p)
+
+		// Filter comments to only those for issues we're pushing (if args specified)
+		var commentsToPost []PendingComment
+		if len(args) > 0 {
+			// Build set of issue numbers we're pushing
+			pushingNumbers := make(map[string]struct{})
+			for _, item := range filteredIssues {
+				pushingNumbers[item.Issue.Number.String()] = struct{}{}
+			}
+			for _, comment := range pendingComments {
+				if _, ok := pushingNumbers[comment.IssueNumber.String()]; ok {
+					commentsToPost = append(commentsToPost, comment)
+				}
+			}
+		} else {
+			for _, comment := range pendingComments {
+				commentsToPost = append(commentsToPost, comment)
+			}
+		}
+
+		// Sort by issue number for consistent output
+		sort.Slice(commentsToPost, func(i, j int) bool {
+			return commentsToPost[i].IssueNumber.String() < commentsToPost[j].IssueNumber.String()
+		})
+
+		// Skip comments for issues that had conflicts
+		conflictSet := make(map[string]struct{})
+		for _, num := range conflicts {
+			conflictSet[num] = struct{}{}
+		}
+
+		for _, comment := range commentsToPost {
+			numStr := comment.IssueNumber.String()
+
+			// Skip local issues (can't post comments to issues that don't exist yet)
+			if comment.IssueNumber.IsLocal() {
+				// Check if it was mapped to a real number
+				if realNum, ok := mapping[numStr]; ok {
+					comment.IssueNumber = issue.IssueNumber(realNum)
+					numStr = realNum
+				} else {
+					continue
+				}
+			}
+
+			// Skip issues that had conflicts
+			if _, isConflict := conflictSet[numStr]; isConflict {
+				continue
+			}
+
+			if opts.DryRun {
+				fmt.Fprintf(a.Out, "%s #%s\n", t.MutedText("Would post comment to"), numStr)
+				continue
+			}
+
+			if err := client.CreateComment(ctx, numStr, comment.Body); err != nil {
+				fmt.Fprintf(a.Err, "%s posting comment to #%s: %v\n", t.WarningText("Warning:"), numStr, err)
+				continue
+			}
+
+			// Delete the comment file on success
+			if err := deletePendingComment(comment); err != nil {
+				fmt.Fprintf(a.Err, "%s removing comment file %s: %v\n", t.WarningText("Warning:"), relPath(a.Root, comment.Path), err)
+			}
+
+			fmt.Fprintf(a.Out, "%s #%s\n", t.SuccessText("Posted comment to"), numStr)
+		}
+	}
+
 	return nil
 }

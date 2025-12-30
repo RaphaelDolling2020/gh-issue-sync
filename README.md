@@ -158,6 +158,28 @@ Alternatively, move files manually:
 - Move from `open/` to `closed/` to close
 - Move from `closed/` to `open/` to reopen
 
+### Pending Comments
+
+You can queue a comment to be posted when pushing an issue. Create a file named
+`{number}.comment.md` in the same directory as the issue:
+
+```bash
+# Create a pending comment for issue #42
+echo "Updated the acceptance criteria based on PM feedback." > .issues/open/42.comment.md
+
+# The comment will be posted on push
+gh-issue-sync push
+```
+
+The comment file is automatically deleted after successfully posting. This is
+useful for agents or batch workflows that want to leave notes when updating issues.
+
+To skip posting comments during push:
+
+```bash
+gh-issue-sync push --no-comments
+```
+
 ## Issue File Format
 
 Each issue is a Markdown file with YAML front matter:

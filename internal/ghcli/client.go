@@ -1412,3 +1412,10 @@ func (c *Client) SyncProjects(ctx context.Context, issueNumber string, localProj
 
 	return nil
 }
+
+// CreateComment posts a comment on an issue.
+func (c *Client) CreateComment(ctx context.Context, issueNumber string, body string) error {
+	args := []string{"issue", "comment", issueNumber, "--body", body}
+	_, err := c.runner.Run(ctx, "gh", c.withRepo(args)...)
+	return err
+}

@@ -117,6 +117,10 @@ func loadLocalIssuesWithErrors(p paths.Paths) LoadResult {
 			if filepath.Ext(entry.Name()) != ".md" {
 				continue
 			}
+			// Skip comment files (e.g., 42.comment.md)
+			if strings.HasSuffix(entry.Name(), ".comment.md") {
+				continue
+			}
 			path := filepath.Join(dir.Path, entry.Name())
 			relPath := filepath.Join(filepath.Base(filepath.Dir(dir.Path)), filepath.Base(dir.Path), entry.Name())
 			parsed, err := issue.ParseFile(path)

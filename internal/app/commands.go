@@ -96,8 +96,32 @@ func (a *App) Status(ctx context.Context) error {
 		}
 	}
 
+	// Load and display pending comments
+	pendingComments := loadAllPendingComments(p)
+	if len(pendingComments) > 0 {
+		fmt.Fprintln(a.Out)
+		fmt.Fprintln(a.Out, t.Bold("Pending comments:"))
+		// Sort by issue number
+		var commentNumbers []string
+		for num := range pendingComments {
+			commentNumbers = append(commentNumbers, num)
+		}
+		sort.Strings(commentNumbers)
+		for _, num := range commentNumbers {
+			comment := pendingComments[num]
+			// Truncate comment body for display
+			body := comment.Body
+			if len(body) > 60 {
+				body = body[:57] + "..."
+			}
+			// Replace newlines with spaces
+			body = strings.ReplaceAll(body, "\n", " ")
+			fmt.Fprintf(a.Out, "    %s %s\n", t.AccentText("#"+num+":"), t.MutedText(body))
+		}
+	}
+
 	// Summary
-	if len(modified) == 0 && len(newLocal) == 0 {
+	if len(modified) == 0 && len(newLocal) == 0 && len(pendingComments) == 0 {
 		fmt.Fprintf(a.Out, "\n%s\n", t.MutedText("No local changes"))
 	}
 
@@ -221,15 +245,18 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 		return nil
 	}
 
+	// Load pending comments for display
+	pendingComments := loadAllPendingComments(p)
+
 	// Format and print
 	for _, item := range filtered {
-		a.printIssueLine(item, labelColors)
+		a.printIssueLine(item, labelColors, pendingComments)
 	}
 
 	return nil
 }
 
-func (a *App) printIssueLine(item IssueFile, labelColors map[string]string) {
+func (a *App) printIssueLine(item IssueFile, labelColors map[string]string, pendingComments map[string]PendingComment) {
 	t := a.Theme
 	iss := item.Issue
 
@@ -274,10 +301,21 @@ func (a *App) printIssueLine(item IssueFile, labelColors map[string]string) {
 		assigneeDisplay = t.MutedText(strings.Join(assignees, ", "))
 	}
 
+	// Check for pending comment
+	var commentIndicator string
+	if pendingComments != nil {
+		if _, hasComment := pendingComments[iss.Number.String()]; hasComment {
+			commentIndicator = t.WarningText("(+comment)")
+		}
+	}
+
 	// Build output line with proper padding
 	line := padRight(numDisplay, 6) + "  " + padRight(title, 50)
 	if labelDisplay != "" {
 		line += "  " + labelDisplay
+	}
+	if commentIndicator != "" {
+		line += "  " + commentIndicator
 	}
 	if assigneeDisplay != "" {
 		line += "  " + assigneeDisplay
@@ -621,6 +659,18 @@ func (a *App) View(ctx context.Context, ref string, opts ViewOptions) error {
 		}
 	}
 
+	// Check for pending comment
+	if comment, found := findPendingCommentForIssue(p, iss.Number, file.State); found {
+		fmt.Fprintln(a.Out)
+		fmt.Fprintf(a.Out, "%s\n", t.WarningText("--- Pending Comment ---"))
+		rendered, err := renderMarkdown(comment.Body)
+		if err != nil {
+			fmt.Fprintln(a.Out, comment.Body)
+		} else {
+			fmt.Fprint(a.Out, rendered)
+		}
+	}
+
 	return nil
 }
 
@@ -710,6 +760,15 @@ func (a *App) DiffAll(ctx context.Context, opts DiffOptions) error {
 			fmt.Fprintf(a.Out, "    %s\n", t.Styler().Fg(t.FieldName, "body:"))
 			a.printWordDiff(base.Body, local.Body)
 		}
+
+		// Show pending comment if exists
+		if comment, found := findPendingCommentForIssue(p, file.Issue.Number, file.State); found {
+			fmt.Fprintln(a.Out)
+			fmt.Fprintf(a.Out, "    %s\n", t.Styler().Fg(t.FieldName, "pending comment:"))
+			for _, line := range strings.Split(comment.Body, "\n") {
+				fmt.Fprintf(a.Out, "    %s %s\n", t.SuccessText("+"), line)
+			}
+		}
 	}
 
 	if count == 0 {
@@ -771,8 +830,12 @@ func (a *App) Diff(ctx context.Context, number string, opts DiffOptions) error {
 	base = issue.Normalize(base)
 	local = issue.Normalize(local)
 
+	// Check for pending comment
+	pendingComment, hasPendingComment := findPendingCommentForIssue(p, file.Issue.Number, file.State)
+
 	// Check if there are any differences
-	if issue.EqualIgnoringSyncedAt(base, local) {
+	hasChanges := !issue.EqualIgnoringSyncedAt(base, local)
+	if !hasChanges && !hasPendingComment {
 		fmt.Fprintf(a.Out, "%s\n", t.MutedText(fmt.Sprintf("No differences between local and %s", baseLabel)))
 		return nil
 	}
@@ -792,6 +855,16 @@ func (a *App) Diff(ctx context.Context, number string, opts DiffOptions) error {
 		hasWhitespaceChanges := a.printWordDiff(base.Body, local.Body)
 		if hasWhitespaceChanges {
 			fmt.Fprintf(a.Out, "\n    %s\n", t.MutedText("(note: whitespace also changed)"))
+		}
+	}
+
+	// Show pending comment if exists
+	if hasPendingComment {
+		fmt.Fprintln(a.Out)
+		fmt.Fprintf(a.Out, "    %s\n", t.Styler().Fg(t.FieldName, "pending comment:"))
+		// Indent each line of the comment
+		for _, line := range strings.Split(pendingComment.Body, "\n") {
+			fmt.Fprintf(a.Out, "    %s %s\n", t.SuccessText("+"), line)
 		}
 	}
 
