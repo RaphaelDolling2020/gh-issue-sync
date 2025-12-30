@@ -71,8 +71,32 @@ type ProjectEntry struct {
 	Title string `json:"title"`
 }
 
+// ParseError represents an error parsing a specific issue file
+type ParseError struct {
+	Path string
+	Err  error
+}
+
+func (e ParseError) Error() string {
+	return fmt.Sprintf("%s: %v", e.Path, e.Err)
+}
+
+// LoadResult contains loaded issues and any parse errors encountered
+type LoadResult struct {
+	Issues []IssueFile
+	Errors []ParseError
+}
+
 func loadLocalIssues(p paths.Paths) ([]IssueFile, error) {
-	issues := []IssueFile{}
+	result := loadLocalIssuesWithErrors(p)
+	if len(result.Errors) > 0 {
+		return nil, result.Errors[0]
+	}
+	return result.Issues, nil
+}
+
+func loadLocalIssuesWithErrors(p paths.Paths) LoadResult {
+	result := LoadResult{}
 	for _, dir := range []struct {
 		Path  string
 		State string
@@ -82,7 +106,9 @@ func loadLocalIssues(p paths.Paths) ([]IssueFile, error) {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
-			return nil, err
+			// Directory read errors are fatal
+			result.Errors = append(result.Errors, ParseError{Path: dir.Path, Err: err})
+			return result
 		}
 		for _, entry := range entries {
 			if entry.IsDir() {
@@ -92,15 +118,17 @@ func loadLocalIssues(p paths.Paths) ([]IssueFile, error) {
 				continue
 			}
 			path := filepath.Join(dir.Path, entry.Name())
+			relPath := filepath.Join(filepath.Base(filepath.Dir(dir.Path)), filepath.Base(dir.Path), entry.Name())
 			parsed, err := issue.ParseFile(path)
 			if err != nil {
-				return nil, err
+				result.Errors = append(result.Errors, ParseError{Path: relPath, Err: err})
+				continue
 			}
 			parsed.State = dir.State
-			issues = append(issues, IssueFile{Issue: parsed, Path: path, State: dir.State})
+			result.Issues = append(result.Issues, IssueFile{Issue: parsed, Path: path, State: dir.State})
 		}
 	}
-	return issues, nil
+	return result
 }
 
 func findIssueByNumber(p paths.Paths, number string) (IssueFile, error) {

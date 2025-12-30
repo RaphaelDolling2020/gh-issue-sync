@@ -28,15 +28,16 @@ func (a *App) Status(ctx context.Context) error {
 
 	fmt.Fprintf(a.Out, "%s %s\n", t.MutedText("Repository:"), t.AccentText(cfg.Repository.Owner+"/"+cfg.Repository.Repo))
 	if cfg.Sync.LastFullPull != nil {
-		fmt.Fprintf(a.Out, "%s %s\n\n", t.MutedText("Last full pull:"), cfg.Sync.LastFullPull.Format(time.RFC3339))
+		fmt.Fprintf(a.Out, "%s %s\n", t.MutedText("Last full pull:"), cfg.Sync.LastFullPull.Format(time.RFC3339))
 	} else {
-		fmt.Fprintf(a.Out, "%s %s\n\n", t.MutedText("Last full pull:"), t.WarningText("never"))
+		fmt.Fprintf(a.Out, "%s %s\n", t.MutedText("Last full pull:"), t.WarningText("never"))
 	}
 
-	localIssues, err := loadLocalIssues(p)
-	if err != nil {
-		return err
+	result := loadLocalIssuesWithErrors(p)
+	for _, parseErr := range result.Errors {
+		fmt.Fprintf(a.Err, "%s %v\n", t.WarningText("Warning:"), parseErr)
 	}
+	localIssues := result.Issues
 	var modified []string
 	var newLocal []string
 	var stateChanges []string
@@ -61,27 +62,27 @@ func (a *App) Status(ctx context.Context) error {
 
 	if len(modified) > 0 {
 		sort.Strings(modified)
+		fmt.Fprintln(a.Out)
 		fmt.Fprintln(a.Out, t.Bold("Modified locally:"))
 		for _, path := range modified {
 			fmt.Fprintf(a.Out, "  %s %s\n", t.FormatStatus("M"), relPath(a.Root, path))
 		}
-		fmt.Fprintln(a.Out)
 	}
 	if len(newLocal) > 0 {
 		sort.Strings(newLocal)
+		fmt.Fprintln(a.Out)
 		fmt.Fprintln(a.Out, t.Bold("New local issues:"))
 		for _, path := range newLocal {
 			fmt.Fprintf(a.Out, "  %s %s\n", t.FormatStatus("A"), relPath(a.Root, path))
 		}
-		fmt.Fprintln(a.Out)
 	}
 	if len(stateChanges) > 0 {
 		sort.Strings(stateChanges)
+		fmt.Fprintln(a.Out)
 		fmt.Fprintln(a.Out, t.Bold("State changes:"))
 		for _, path := range stateChanges {
 			fmt.Fprintf(a.Out, "  %s %s\n", t.AccentText("->"), relPath(a.Root, path))
 		}
-		fmt.Fprintln(a.Out)
 	}
 
 	// Check if projects are used and warn about missing scope
@@ -119,10 +120,11 @@ func (a *App) List(ctx context.Context, opts ListOptions) error {
 	labelCache, _ := loadLabelCache(p)
 	labelColors := labelCacheToColorMap(labelCache)
 
-	localIssues, err := loadLocalIssues(p)
-	if err != nil {
-		return err
+	result := loadLocalIssuesWithErrors(p)
+	for _, parseErr := range result.Errors {
+		fmt.Fprintf(a.Err, "%s %v\n", t.WarningText("Warning:"), parseErr)
 	}
+	localIssues := result.Issues
 
 	// Apply filters
 	var filtered []IssueFile
