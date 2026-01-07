@@ -4,6 +4,8 @@ All notable changes to gh-issue-sync are documented here.
 
 ## Unreleased
 
+## 0.3.0
+
 * Added diff rendering for newly created issues.
 * Added version information to the binary output.
 * Fixed GraphQL escaping that could break requests.
